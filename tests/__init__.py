@@ -1,0 +1,1 @@
+"""Testy – główny pakiet testowy."""

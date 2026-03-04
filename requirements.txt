@@ -1,0 +1,35 @@
+# === Data Sources ===
+soccerdata>=1.4.0
+requests>=2.31.0
+
+# === Data Processing ===
+pandas>=2.1.0
+numpy>=1.25.0
+
+# === Data Quality ===
+great-expectations>=0.18.0
+# pydantic>=2.5.0  # walidacja schematów
+
+# === Fuzzy Matching / Entity Resolution ===
+rapidfuzz>=3.5.0
+# dedupe>=2.0.0  # zaawansowana deduplikacja
+
+# === Storage ===
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+# psycopg2-binary>=2.9.0  # PostgreSQL
+
+# === API ===
+fastapi>=0.109.0
+uvicorn>=0.27.0
+
+# === Dashboard ===
+# streamlit>=1.30.0  # opcjonalnie
+
+# === Testing ===
+pytest>=8.0.0
+pytest-cov>=4.1.0
+
+# === Dev Tools ===
+ruff>=0.2.0
+pre-commit>=3.6.0

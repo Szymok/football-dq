@@ -1,0 +1,47 @@
+# xG Quality Rules – Premier League
+# Reguły jakości danych dla metryk Expected Goals
+
+rules:
+  # === COMPLETENESS ===
+  - name: xg_not_null
+    dimension: completeness
+    description: "Wartość xG nie powinna być pusta"
+    column: xg
+    check: not_null
+    severity: critical
+
+  - name: player_name_not_null
+    dimension: completeness
+    description: "Nazwa zawodnika jest wymagana"
+    column: player
+    check: not_null
+    severity: critical
+
+  # === VALIDITY ===
+  - name: xg_range
+    dimension: validity
+    description: "xG musi mieścić się w realistycznym zakresie"
+    column: xg
+    check: between
+    params:
+      min: 0.0
+      max: 7.0
+    severity: warning
+
+  - name: minutes_played_range
+    dimension: validity
+    description: "Minuty na boisku: 0-120 (z dogrywką)"
+    column: minutes
+    check: between
+    params:
+      min: 0
+      max: 120
+    severity: warning
+
+  # === UNIQUENESS ===
+  - name: no_duplicate_player_match
+    dimension: uniqueness
+    description: "Jeden zawodnik może mieć max 1 rekord na mecz"
+    columns: [player, match_id]
+    check: unique_combination
+    severity: critical
