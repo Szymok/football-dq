@@ -455,7 +455,7 @@ with st.sidebar:
 
     page = st.radio(
         "Navigation",
-        ["Scorecard", "Players", "Matches", "Checks"],
+        ["Scorecard", "Reconciliation", "Players", "Elo Ratings", "Matches", "Checks"],
         index=0,
         label_visibility="collapsed",
     )
@@ -815,8 +815,233 @@ def page_checks():
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# PAGE: RECONCILIATION
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def page_reconciliation():
+    st.markdown('<h1>Cross-Source<br><span style="color: var(--accent-amber);">Reconciliation</span></h1>',
+                unsafe_allow_html=True)
+
+    conn = get_connection()
+
+    # ── Source Summary ──
+    st.markdown('<h3>Source Overview</h3>', unsafe_allow_html=True)
+    try:
+        src_summary = pd.read_sql_query("""
+            SELECT source,
+                   count(*) as matches,
+                   min(date) as earliest,
+                   max(date) as latest,
+                   count(DISTINCT home_team) as teams
+            FROM matches GROUP BY source ORDER BY matches DESC
+        """, conn)
+        if not src_summary.empty:
+            cols = st.columns(len(src_summary))
+            for i, (_, row) in enumerate(src_summary.iterrows()):
+                with cols[i]:
+                    color = COLORS.get(row["source"], "#448aff")
+                    st.markdown(f"""
+                    <div class="dim-card">
+                        <div style="font-family:var(--font-mono); font-size:0.7rem; color:{color};
+                              text-transform:uppercase; letter-spacing:0.08em;">{row['source']}</div>
+                        <div style="font-family:var(--font-display); font-weight:800; font-size:1.8rem;
+                              color:var(--text-primary); margin:4px 0;">{row['matches']}</div>
+                        <div style="font-family:var(--font-display); font-size:0.75rem; color:var(--text-muted);">
+                            matches &middot; {row['teams']} teams
+                        </div>
+                        <div style="font-family:var(--font-mono); font-size:0.7rem; color:var(--text-muted); margin-top:6px;">
+                            {str(row['earliest'])[:10]} → {str(row['latest'])[:10]}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+    except Exception:
+        st.info("No match data.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Player Stats: Cross-source comparison ──
+    st.markdown('<h3>Player Stats by Source</h3>', unsafe_allow_html=True)
+    try:
+        stats_by_source = pd.read_sql_query("""
+            SELECT source,
+                   count(DISTINCT player_name) as players,
+                   sum(goals) as total_goals,
+                   round(avg(goals), 1) as avg_goals,
+                   round(sum(xg), 1) as total_xg,
+                   round(avg(xg), 2) as avg_xg,
+                   sum(assists) as total_assists,
+                   round(avg(assists), 1) as avg_assists
+            FROM player_match_stats
+            GROUP BY source
+        """, conn)
+
+        if not stats_by_source.empty:
+            st.dataframe(stats_by_source, use_container_width=True, hide_index=True)
+
+            # Bar chart comparison
+            fig = go.Figure()
+            for _, row in stats_by_source.iterrows():
+                color = COLORS.get(row["source"], "#448aff")
+                fig.add_trace(go.Bar(
+                    x=["Players", "Total Goals", "Total xG", "Total Assists"],
+                    y=[row["players"], row["total_goals"], row["total_xg"], row["total_assists"]],
+                    name=row["source"],
+                    marker=dict(color=color, line=dict(width=0)),
+                    texttemplate="%{y}", textposition="outside",
+                    textfont=dict(family="JetBrains Mono", size=10),
+                ))
+            apply_theme(fig, barmode="group", height=360, margin=dict(l=0, r=0, t=8, b=0))
+            fig.update_xaxes(tickfont=dict(size=12, color="#edf0f7"))
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    except Exception:
+        st.info("No player stats.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Side-by-side Player Comparison ──
+    st.markdown('<h3>FBref vs Understat (Side-by-Side)</h3>', unsafe_allow_html=True)
+    try:
+        fbref_df = pd.read_sql_query("""
+            SELECT player_name, team, goals, assists, xg, xg_assist, minutes, shots
+            FROM player_match_stats WHERE source='fbref'
+            ORDER BY xg DESC NULLS LAST
+        """, conn)
+        understat_df = pd.read_sql_query("""
+            SELECT player_name, team, goals, assists, xg, xg_assist, minutes, shots
+            FROM player_match_stats WHERE source='understat'
+            ORDER BY xg DESC NULLS LAST
+        """, conn)
+
+        if not fbref_df.empty and not understat_df.empty:
+            merged = fbref_df.merge(
+                understat_df, on="player_name", how="inner", suffixes=("_fbref", "_understat")
+            )
+            if not merged.empty:
+                merged["xg_delta"] = (merged["xg_fbref"].fillna(0) - merged["xg_understat"].fillna(0)).round(2)
+                merged["goals_delta"] = (merged["goals_fbref"].fillna(0) - merged["goals_understat"].fillna(0)).astype(int)
+
+                display_cols = [
+                    "player_name", "team_fbref",
+                    "goals_fbref", "goals_understat", "goals_delta",
+                    "xg_fbref", "xg_understat", "xg_delta",
+                    "assists_fbref", "assists_understat",
+                ]
+                st.dataframe(merged[display_cols].head(30), use_container_width=True, hide_index=True, height=420)
+
+                # Delta distribution
+                st.markdown('<h3>xG Delta Distribution (FBref − Understat)</h3>', unsafe_allow_html=True)
+                fig_hist = go.Figure(go.Histogram(
+                    x=merged["xg_delta"],
+                    nbinsx=30,
+                    marker=dict(color=COLORS["amber"], line=dict(width=0)),
+                ))
+                fig_hist.add_vline(x=0, line=dict(color=COLORS["green"], width=2, dash="dot"))
+                apply_theme(fig_hist, height=280, margin=dict(l=0, r=0, t=8, b=0))
+                fig_hist.update_xaxes(title="xG Delta", title_font=dict(size=11, color="#5c6478"))
+                fig_hist.update_yaxes(title="Players", title_font=dict(size=11, color="#5c6478"))
+                st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.info("No matching players between FBref and Understat (exact name match).")
+        else:
+            st.info("Need both FBref and Understat player stats.")
+    except Exception as e:
+        st.info(f"Could not build comparison: {e}")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Coverage Matrix ──
+    st.markdown('<h3>Team Coverage Matrix</h3>', unsafe_allow_html=True)
+    try:
+        coverage = pd.read_sql_query("""
+            SELECT home_team as team, source, count(*) as matches
+            FROM matches
+            GROUP BY home_team, source
+        """, conn)
+        if not coverage.empty:
+            pivot = coverage.pivot_table(index="team", columns="source", values="matches", fill_value=0)
+            pivot = pivot.reset_index().sort_values(pivot.columns[1], ascending=False)
+            st.dataframe(pivot.head(25), use_container_width=True, hide_index=True, height=420)
+    except Exception:
+        pass
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# PAGE: ELO RATINGS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def page_elo():
+    st.markdown('<h1>Team Elo<br><span style="color: var(--accent-green);">Ratings</span></h1>',
+                unsafe_allow_html=True)
+
+    try:
+        elo_df = query_df("""
+            SELECT team, elo, rank, country, level, date
+            FROM team_elo_ratings
+            ORDER BY elo DESC
+        """)
+    except Exception:
+        st.error("No Elo data. Run: `python scripts/load_data.py`")
+        return
+
+    if elo_df.empty:
+        st.info("No Elo ratings in database.")
+        return
+
+    # ── KPIs ──
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Teams", len(elo_df))
+    c2.metric("Avg Elo", round(elo_df["elo"].mean(), 0) if not elo_df["elo"].isna().all() else "—")
+    c3.metric("Max Elo", round(elo_df["elo"].max(), 0) if not elo_df["elo"].isna().all() else "—")
+    c4.metric("Countries", elo_df["country"].nunique() if "country" in elo_df.columns else "—")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Filter ──
+    fc1, fc2 = st.columns(2)
+    with fc1:
+        countries = ["All"] + sorted(elo_df["country"].dropna().unique().tolist())
+        country_f = st.selectbox("Country", countries)
+    with fc2:
+        levels = ["All"] + sorted(elo_df["level"].dropna().unique().tolist())
+        level_f = st.selectbox("Level", levels)
+
+    filtered = elo_df.copy()
+    if country_f != "All":
+        filtered = filtered[filtered["country"] == country_f]
+    if level_f != "All":
+        filtered = filtered[filtered["level"] == level_f]
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Top 25 chart ──
+    top = filtered.head(25)
+    fig = go.Figure(go.Bar(
+        y=top["team"],
+        x=top["elo"],
+        orientation="h",
+        marker=dict(
+            color=top["elo"],
+            colorscale=[[0, "#1e2230"], [0.5, "#00e676"], [1, "#ffab00"]],
+            line=dict(width=0),
+        ),
+        text=top["elo"].round(0),
+        textposition="outside",
+        textfont=dict(family="JetBrains Mono", size=11, color="#edf0f7"),
+    ))
+    apply_theme(fig, height=max(500, len(top) * 24), margin=dict(l=0, r=50, t=8, b=0))
+    fig.update_yaxes(autorange="reversed", tickfont=dict(size=11, color="#edf0f7"))
+    fig.update_xaxes(title="ELO", title_font=dict(size=11, color="#5c6478"))
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # ── Full table ──
+    st.markdown('<h3>All Ratings</h3>', unsafe_allow_html=True)
+    st.dataframe(filtered, use_container_width=True, hide_index=True, height=500)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ROUTER
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{"Scorecard": page_scorecard, "Players": page_players,
+{"Scorecard": page_scorecard, "Reconciliation": page_reconciliation,
+ "Players": page_players, "Elo Ratings": page_elo,
  "Matches": page_matches, "Checks": page_checks}[page]()

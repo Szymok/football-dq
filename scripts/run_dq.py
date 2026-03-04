@@ -32,6 +32,12 @@ def main():
         runner = DQRunner(session)
         results = runner.run_all()
 
+        # Cross-source checks (reconciliation)
+        from src.reconciliation.reconciler import CrossSourceDQChecks
+        cross = CrossSourceDQChecks(session)
+        cross_results = cross.run_all()
+        results.extend(cross_results)
+
         # Oblicz score
         score = calculate_dq_score(results)
         print_scorecard(score)
