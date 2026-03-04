@@ -100,3 +100,20 @@ class DQCheckResult(Base):
     threshold = Column(Float, nullable=True)
     details = Column(Text, nullable=True)
     run_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class TeamEloRating(Base):
+    __tablename__ = "team_elo_ratings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team = Column(String(200), nullable=False)
+    elo = Column(Float, nullable=True)
+    rank = Column(Integer, nullable=True)
+    date = Column(DateTime, nullable=True)
+    country = Column(String(100), nullable=True)
+    level = Column(String(50), nullable=True)
+    source = Column(String(50), nullable=False, default="clubelo")
+
+    __table_args__ = (
+        UniqueConstraint("team", "date", "source", name="uq_elo"),
+    )

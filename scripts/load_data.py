@@ -1,5 +1,12 @@
 """
-Skrypt CLI: Ładowanie danych z soccerdata do SQLite.
+CLI: Załaduj dane z 5 źródeł do SQLite.
+
+Źródła:
+  1. FBref (schedule + player stats)
+  2. Understat (schedule + player stats)
+  3. ClubElo (Elo ratings)
+  4. ESPN (schedule)
+  5. MatchHistory / Football-Data.co.uk (results + odds)
 
 Użycie:
     python scripts/load_data.py
@@ -9,74 +16,111 @@ import sys
 import os
 import logging
 
-# Dodaj root projektu do PYTHONPATH
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.config.settings import LOG_FORMAT, LOG_LEVEL, LEAGUES, SEASONS
+from src.config.settings import LEAGUES, SEASONS, LOG_LEVEL, LOG_FORMAT
 from src.storage.database import init_db, SessionLocal
-from src.extractors.fbref import FBrefExtractor
-from src.extractors.understat import UnderstatExtractor
-from src.extractors.loader import DataLoader
 
 logging.basicConfig(level=LOG_LEVEL, format=LOG_FORMAT)
-logger = logging.getLogger("load_data")
+logger = logging.getLogger(__name__)
+
+LEAGUE = LEAGUES[0]
+SEASON = SEASONS[0]
 
 
 def main():
-    logger.info("=" * 60)
-    logger.info("  ⚽ Football DQ – Ładowanie danych")
-    logger.info(f"  Ligi:    {LEAGUES}")
-    logger.info(f"  Sezony:  {SEASONS}")
-    logger.info("=" * 60)
+    logger.info("=== Football DQ – Data Loader ===")
+    logger.info(f"Liga: {LEAGUE}, Sezon: {SEASON}")
 
-    # 1. Inicjalizacja bazy danych
-    logger.info("Tworzenie tabel w bazie danych...")
+    # 1. Inicjalizacja bazy
     init_db()
-
     session = SessionLocal()
+
+    from src.extractors.loader import DataLoader
     loader = DataLoader(session)
 
-    league = LEAGUES[0]
-    season = SEASONS[0]
+    total_matches = 0
+    total_stats = 0
+    total_elo = 0
 
+    # ─── 2. FBref ────────────────────────────────────────
+    logger.info("─── Źródło 1/5: FBref ───")
     try:
-        # 2. Ekstrakcja z FBref
-        logger.info("\n── FBref ──")
+        from src.extractors.fbref import FBrefExtractor
         fbref = FBrefExtractor()
         fbref_data = fbref.extract()
 
-        matches_loaded = loader.load_schedule(
-            fbref_data.get("schedule", None), "fbref", league, season
-        )
-        stats_loaded = loader.load_player_season_stats(
-            fbref_data.get("player_season_stats", None), "fbref", season
-        )
-        logger.info(f"FBref: {matches_loaded} meczów, {stats_loaded} statystyk zawodników")
+        if "schedule" in fbref_data and not fbref_data["schedule"].empty:
+            c = loader.load_schedule(fbref_data["schedule"], "fbref", LEAGUE, SEASON)
+            total_matches += c
 
-        # 3. Ekstrakcja z Understat
-        logger.info("\n── Understat ──")
+        if "player_season_stats" in fbref_data and not fbref_data["player_season_stats"].empty:
+            c = loader.load_player_season_stats(fbref_data["player_season_stats"], "fbref", SEASON)
+            total_stats += c
+    except Exception as e:
+        logger.error(f"FBref error: {e}")
+
+    # ─── 3. Understat ────────────────────────────────────
+    logger.info("─── Źródło 2/5: Understat ───")
+    try:
+        from src.extractors.understat import UnderstatExtractor
         understat = UnderstatExtractor()
         understat_data = understat.extract()
 
-        matches_loaded_u = loader.load_schedule(
-            understat_data.get("schedule", None), "understat", league, season
-        )
-        stats_loaded_u = loader.load_player_season_stats(
-            understat_data.get("player_season_stats", None), "understat", season
-        )
-        logger.info(f"Understat: {matches_loaded_u} meczów, {stats_loaded_u} statystyk zawodników")
+        if "schedule" in understat_data and not understat_data["schedule"].empty:
+            c = loader.load_schedule(understat_data["schedule"], "understat", LEAGUE, SEASON)
+            total_matches += c
 
-        # Podsumowanie
-        logger.info("\n" + "=" * 60)
-        logger.info("  ✅ Ładowanie zakończone!")
-        logger.info(f"  Łącznie: {matches_loaded + matches_loaded_u} meczów, "
-                     f"{stats_loaded + stats_loaded_u} statystyk")
-        logger.info("=" * 60)
-
+        if "player_season_stats" in understat_data and not understat_data["player_season_stats"].empty:
+            c = loader.load_player_season_stats(understat_data["player_season_stats"], "understat", SEASON)
+            total_stats += c
     except Exception as e:
-        logger.error(f"Błąd podczas ładowania danych: {e}", exc_info=True)
-    finally:
-        session.close()
+        logger.error(f"Understat error: {e}")
+
+    # ─── 4. ClubElo ──────────────────────────────────────
+    logger.info("─── Źródło 3/5: ClubElo ───")
+    try:
+        from src.extractors.clubelo import ClubEloExtractor
+        clubelo = ClubEloExtractor()
+        clubelo_data = clubelo.extract()
+
+        if "elo_ratings" in clubelo_data and not clubelo_data["elo_ratings"].empty:
+            c = loader.load_elo_ratings(clubelo_data["elo_ratings"], "clubelo")
+            total_elo += c
+    except Exception as e:
+        logger.error(f"ClubElo error: {e}")
+
+    # ─── 5. ESPN ─────────────────────────────────────────
+    logger.info("─── Źródło 4/5: ESPN ───")
+    try:
+        from src.extractors.espn import ESPNExtractor
+        espn = ESPNExtractor()
+        espn_data = espn.extract()
+
+        if "schedule" in espn_data and not espn_data["schedule"].empty:
+            c = loader.load_schedule(espn_data["schedule"], "espn", LEAGUE, SEASON)
+            total_matches += c
+    except Exception as e:
+        logger.error(f"ESPN error: {e}")
+
+    # ─── 6. MatchHistory ─────────────────────────────────
+    logger.info("─── Źródło 5/5: MatchHistory ───")
+    try:
+        from src.extractors.match_history import MatchHistoryExtractor
+        mh = MatchHistoryExtractor()
+        mh_data = mh.extract()
+
+        if "games" in mh_data and not mh_data["games"].empty:
+            c = loader.load_schedule(mh_data["games"], "match_history", LEAGUE, SEASON)
+            total_matches += c
+    except Exception as e:
+        logger.error(f"MatchHistory error: {e}")
+
+    # ─── Podsumowanie ────────────────────────────────────
+    session.close()
+    logger.info("=" * 50)
+    logger.info(f"  Łącznie: {total_matches} meczów, {total_stats} statystyk, {total_elo} Elo ratings")
+    logger.info("=" * 50)
 
 
 if __name__ == "__main__":

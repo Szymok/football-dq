@@ -6,7 +6,7 @@ from datetime import datetime
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from src.storage.models import Team, Player, Match, PlayerMatchStats
+from src.storage.models import Team, Player, Match, PlayerMatchStats, TeamEloRating
 
 logger = logging.getLogger(__name__)
 
@@ -165,4 +165,51 @@ class DataLoader:
 
         self.session.commit()
         logger.info(f"Załadowano {count} statystyk zawodników z {source}")
+        return count
+
+    def load_elo_ratings(self, df: pd.DataFrame, source: str = "clubelo") -> int:
+        """Ładuje rankingi Elo drużyn. Zwraca liczbę rekordów."""
+        if df.empty:
+            logger.warning("Pusty DataFrame elo_ratings")
+            return 0
+
+        team_col = _find_col(df, ["team", "club"])
+        elo_col = _find_col(df, ["elo"])
+        rank_col = _find_col(df, ["rank"])
+        country_col = _find_col(df, ["country"])
+        level_col = _find_col(df, ["level"])
+        date_col = _find_col(df, ["from", "date"])
+
+        if not team_col:
+            logger.error(f"Nie znaleziono kolumny team. Kolumny: {list(df.columns)}")
+            return 0
+
+        count = 0
+        for _, row in df.iterrows():
+            team_name = str(row[team_col]).strip() if pd.notna(row[team_col]) else None
+            if not team_name:
+                continue
+
+            date_val = _parse_date(row[date_col]) if date_col else None
+
+            existing = self.session.query(TeamEloRating).filter_by(
+                team=team_name, date=date_val, source=source
+            ).first()
+            if existing:
+                continue
+
+            rating = TeamEloRating(
+                team=team_name,
+                elo=_safe_float(row[elo_col]) if elo_col else None,
+                rank=_safe_int(row[rank_col]) if rank_col else None,
+                date=date_val,
+                country=str(row[country_col]).strip() if country_col and pd.notna(row[country_col]) else None,
+                level=str(row[level_col]).strip() if level_col and pd.notna(row[level_col]) else None,
+                source=source,
+            )
+            self.session.add(rating)
+            count += 1
+
+        self.session.commit()
+        logger.info(f"Załadowano {count} rankingów Elo z {source}")
         return count

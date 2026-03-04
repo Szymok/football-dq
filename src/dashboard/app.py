@@ -328,6 +328,9 @@ COLORS = {
     "purple": "#b388ff",
     "fbref": "#448aff",
     "understat": "#ff6e40",
+    "espn": "#00e676",
+    "clubelo": "#b388ff",
+    "match_history": "#ffab00",
 }
 
 
@@ -469,6 +472,15 @@ with st.sidebar:
             <span style="font-family:var(--font-mono); font-size:0.7rem; padding:3px 8px;
                   background:rgba(255,110,64,0.1); color:#ff6e40; border-radius:4px;
                   border:1px solid rgba(255,110,64,0.2);">Understat</span>
+            <span style="font-family:var(--font-mono); font-size:0.7rem; padding:3px 8px;
+                  background:rgba(0,230,118,0.1); color:#00e676; border-radius:4px;
+                  border:1px solid rgba(0,230,118,0.2);">ESPN</span>
+            <span style="font-family:var(--font-mono); font-size:0.7rem; padding:3px 8px;
+                  background:rgba(179,136,255,0.1); color:#b388ff; border-radius:4px;
+                  border:1px solid rgba(179,136,255,0.2);">ClubElo</span>
+            <span style="font-family:var(--font-mono); font-size:0.7rem; padding:3px 8px;
+                  background:rgba(255,171,0,0.1); color:#ffab00; border-radius:4px;
+                  border:1px solid rgba(255,171,0,0.2);">MatchHistory</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
