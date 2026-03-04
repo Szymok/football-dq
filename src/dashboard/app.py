@@ -824,7 +824,97 @@ def page_reconciliation():
 
     conn = get_connection()
 
-    # ── Source Summary ──
+    # ── Match Linking Summary (via reconciler) ──
+    st.markdown('<h3>Match Linking</h3>', unsafe_allow_html=True)
+    try:
+        from src.storage.database import SessionLocal
+        from src.reconciliation.reconciler import MatchLinker
+
+        session = SessionLocal()
+        linker = MatchLinker(session)
+        summary = linker.get_reconciliation_summary()
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total Pairs", summary["total"])
+        c2.metric("Linked", summary["linked"])
+        c3.metric("Link Rate", f"{summary['match_rate']}%")
+        c4.metric("Unmatched", summary["unmatched"])
+
+        # Donut chart
+        labels = ["Linked (no scores)", "Score Match", "Discrepancy", "Unmatched"]
+        values = [summary["linked_no_scores"], summary.get("match", 0),
+                  summary["discrepancies"], summary["unmatched"]]
+        colors = [COLORS["blue"], COLORS["green"], COLORS["red"], "#2a2f3e"]
+
+        fig_donut = go.Figure(go.Pie(
+            labels=labels, values=values,
+            hole=0.6,
+            marker=dict(colors=colors, line=dict(width=0)),
+            textfont=dict(family="JetBrains Mono", size=11, color="#edf0f7"),
+            textinfo="label+value",
+        ))
+        apply_theme(fig_donut, height=300, margin=dict(l=0, r=0, t=8, b=8),
+                    showlegend=False)
+        st.plotly_chart(fig_donut, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Linked Matches Table ──
+        st.markdown('<h3>Linked Matches</h3>', unsafe_allow_html=True)
+        linked_df = linker.link_matches()
+        if not linked_df.empty:
+            status_filter = st.selectbox(
+                "Filter by status",
+                ["All"] + sorted(linked_df["status"].unique().tolist()),
+            )
+            if status_filter != "All":
+                linked_df = linked_df[linked_df["status"] == status_filter]
+
+            display_cols = ["date", "source_a", "home_a", "away_a", "score_a",
+                          "source_b", "home_b", "away_b", "score_b", "status"]
+            st.dataframe(
+                linked_df[display_cols].head(50),
+                use_container_width=True, hide_index=True, height=400,
+                column_config={
+                    "status": st.column_config.TextColumn("Status", width="small"),
+                    "date": st.column_config.TextColumn("Date", width="small"),
+                }
+            )
+
+            # Status breakdown
+            status_counts = linked_df["status"].value_counts()
+            st.markdown("<br>", unsafe_allow_html=True)
+            status_html = " ".join(
+                f'<span style="font-family:var(--font-mono); font-size:0.75rem; padding:4px 10px; '
+                f'background:{"rgba(0,230,118,0.1)" if s == "MATCH" else "rgba(255,23,68,0.1)" if s == "DISCREPANCY" else "rgba(68,138,255,0.1)" if "LINKED" in s else "rgba(42,47,62,0.3)"}; '
+                f'color:{"#00e676" if s == "MATCH" else "#ff1744" if s == "DISCREPANCY" else "#448aff" if "LINKED" in s else "#5c6478"}; '
+                f'border-radius:6px; margin-right:4px;">{s}: {c}</span>'
+                for s, c in status_counts.items()
+            )
+            st.markdown(f'<div style="display:flex; gap:8px; flex-wrap:wrap;">{status_html}</div>',
+                        unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Team Name Mapping ──
+        st.markdown('<h3>Team Name Mapping (Auto-Discovered)</h3>', unsafe_allow_html=True)
+        st.markdown(
+            '<p style="font-family:var(--font-display); font-size:0.85rem; color:var(--text-muted);">'
+            'Mapping discovered by linking matches on the same date+time. '
+            'Understat uses numeric IDs, ESPN uses full names.</p>',
+            unsafe_allow_html=True
+        )
+        team_map = linker.build_team_name_map()
+        if not team_map.empty:
+            st.dataframe(team_map, use_container_width=True, hide_index=True, height=400)
+
+        session.close()
+    except Exception as e:
+        st.info(f"Match linking unavailable: {e}")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Source Overview ──
     st.markdown('<h3>Source Overview</h3>', unsafe_allow_html=True)
     try:
         src_summary = pd.read_sql_query("""
@@ -832,7 +922,8 @@ def page_reconciliation():
                    count(*) as matches,
                    min(date) as earliest,
                    max(date) as latest,
-                   count(DISTINCT home_team) as teams
+                   count(DISTINCT home_team) as teams,
+                   sum(CASE WHEN home_score IS NOT NULL THEN 1 ELSE 0 END) as with_scores
             FROM matches GROUP BY source ORDER BY matches DESC
         """, conn)
         if not src_summary.empty:
@@ -840,6 +931,7 @@ def page_reconciliation():
             for i, (_, row) in enumerate(src_summary.iterrows()):
                 with cols[i]:
                     color = COLORS.get(row["source"], "#448aff")
+                    score_pct = round(row["with_scores"] / row["matches"] * 100) if row["matches"] > 0 else 0
                     st.markdown(f"""
                     <div class="dim-card">
                         <div style="font-family:var(--font-mono); font-size:0.7rem; color:{color};
@@ -847,10 +939,10 @@ def page_reconciliation():
                         <div style="font-family:var(--font-display); font-weight:800; font-size:1.8rem;
                               color:var(--text-primary); margin:4px 0;">{row['matches']}</div>
                         <div style="font-family:var(--font-display); font-size:0.75rem; color:var(--text-muted);">
-                            matches &middot; {row['teams']} teams
+                            {row['teams']} teams &middot; {score_pct}% with scores
                         </div>
                         <div style="font-family:var(--font-mono); font-size:0.7rem; color:var(--text-muted); margin-top:6px;">
-                            {str(row['earliest'])[:10]} → {str(row['latest'])[:10]}
+                            {str(row['earliest'])[:10]} &rarr; {str(row['latest'])[:10]}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -859,7 +951,7 @@ def page_reconciliation():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Player Stats: Cross-source comparison ──
+    # ── Player Stats by Source ──
     st.markdown('<h3>Player Stats by Source</h3>', unsafe_allow_html=True)
     try:
         stats_by_source = pd.read_sql_query("""
@@ -871,14 +963,12 @@ def page_reconciliation():
                    round(avg(xg), 2) as avg_xg,
                    sum(assists) as total_assists,
                    round(avg(assists), 1) as avg_assists
-            FROM player_match_stats
-            GROUP BY source
+            FROM player_match_stats GROUP BY source
         """, conn)
 
         if not stats_by_source.empty:
             st.dataframe(stats_by_source, use_container_width=True, hide_index=True)
 
-            # Bar chart comparison
             fig = go.Figure()
             for _, row in stats_by_source.iterrows():
                 color = COLORS.get(row["source"], "#448aff")
@@ -893,74 +983,6 @@ def page_reconciliation():
             apply_theme(fig, barmode="group", height=360, margin=dict(l=0, r=0, t=8, b=0))
             fig.update_xaxes(tickfont=dict(size=12, color="#edf0f7"))
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    except Exception:
-        st.info("No player stats.")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── Side-by-side Player Comparison ──
-    st.markdown('<h3>FBref vs Understat (Side-by-Side)</h3>', unsafe_allow_html=True)
-    try:
-        fbref_df = pd.read_sql_query("""
-            SELECT player_name, team, goals, assists, xg, xg_assist, minutes, shots
-            FROM player_match_stats WHERE source='fbref'
-            ORDER BY xg DESC NULLS LAST
-        """, conn)
-        understat_df = pd.read_sql_query("""
-            SELECT player_name, team, goals, assists, xg, xg_assist, minutes, shots
-            FROM player_match_stats WHERE source='understat'
-            ORDER BY xg DESC NULLS LAST
-        """, conn)
-
-        if not fbref_df.empty and not understat_df.empty:
-            merged = fbref_df.merge(
-                understat_df, on="player_name", how="inner", suffixes=("_fbref", "_understat")
-            )
-            if not merged.empty:
-                merged["xg_delta"] = (merged["xg_fbref"].fillna(0) - merged["xg_understat"].fillna(0)).round(2)
-                merged["goals_delta"] = (merged["goals_fbref"].fillna(0) - merged["goals_understat"].fillna(0)).astype(int)
-
-                display_cols = [
-                    "player_name", "team_fbref",
-                    "goals_fbref", "goals_understat", "goals_delta",
-                    "xg_fbref", "xg_understat", "xg_delta",
-                    "assists_fbref", "assists_understat",
-                ]
-                st.dataframe(merged[display_cols].head(30), use_container_width=True, hide_index=True, height=420)
-
-                # Delta distribution
-                st.markdown('<h3>xG Delta Distribution (FBref − Understat)</h3>', unsafe_allow_html=True)
-                fig_hist = go.Figure(go.Histogram(
-                    x=merged["xg_delta"],
-                    nbinsx=30,
-                    marker=dict(color=COLORS["amber"], line=dict(width=0)),
-                ))
-                fig_hist.add_vline(x=0, line=dict(color=COLORS["green"], width=2, dash="dot"))
-                apply_theme(fig_hist, height=280, margin=dict(l=0, r=0, t=8, b=0))
-                fig_hist.update_xaxes(title="xG Delta", title_font=dict(size=11, color="#5c6478"))
-                fig_hist.update_yaxes(title="Players", title_font=dict(size=11, color="#5c6478"))
-                st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False})
-            else:
-                st.info("No matching players between FBref and Understat (exact name match).")
-        else:
-            st.info("Need both FBref and Understat player stats.")
-    except Exception as e:
-        st.info(f"Could not build comparison: {e}")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── Coverage Matrix ──
-    st.markdown('<h3>Team Coverage Matrix</h3>', unsafe_allow_html=True)
-    try:
-        coverage = pd.read_sql_query("""
-            SELECT home_team as team, source, count(*) as matches
-            FROM matches
-            GROUP BY home_team, source
-        """, conn)
-        if not coverage.empty:
-            pivot = coverage.pivot_table(index="team", columns="source", values="matches", fill_value=0)
-            pivot = pivot.reset_index().sort_values(pivot.columns[1], ascending=False)
-            st.dataframe(pivot.head(25), use_container_width=True, hide_index=True, height=420)
     except Exception:
         pass
 
