@@ -35,8 +35,14 @@ app.include_router(quality_routes.router, prefix="/api/v1/quality", tags=["Quali
 app.include_router(reconciliation_routes.router, prefix="/api/v1/reconciliation", tags=["Reconciliation"])
 app.include_router(golden_routes.router, prefix="/api/v1/golden_record", tags=["Golden Record"])
 
-@app.get("/health")
+from fastapi.responses import RedirectResponse
 
+@app.get("/", include_in_schema=False)
+def root():
+    """Redirect root to API documentation."""
+    return RedirectResponse(url="/docs")
+
+@app.get("/health")
 def health_check():
     """Basic health check endpoint."""
     return {"status": "ok"}

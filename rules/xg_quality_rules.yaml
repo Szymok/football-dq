@@ -13,7 +13,7 @@ rules:
   - name: player_name_not_null
     dimension: completeness
     description: "Nazwa zawodnika jest wymagana"
-    column: player
+    column: player_name
     check: not_null
     severity: critical
 
@@ -42,6 +42,6 @@ rules:
   - name: no_duplicate_player_match
     dimension: uniqueness
     description: "Jeden zawodnik może mieć max 1 rekord na mecz"
-    columns: [player, match_id]
+    columns: [player_name, match_id]
     check: unique_combination
     severity: critical

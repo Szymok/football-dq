@@ -8,7 +8,11 @@ numpy>=1.25.0
 
 # === Data Quality ===
 great-expectations>=0.18.0
-# pydantic>=2.5.0  # walidacja schematów
+pydantic>=2.5.0
+
+# === Dynamic Rules & Monitoring ===
+sentry-sdk>=1.40.0
+pyyaml>=6.0.0
 
 # === Fuzzy Matching / Entity Resolution ===
 rapidfuzz>=3.5.0

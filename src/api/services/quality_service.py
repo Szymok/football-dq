@@ -26,7 +26,9 @@ class QualityService:
         return QualityScorecardResponse(
             overall_score=score_data["overall_score"],
             dimension_scores=score_data["dimension_scores"],
+            vendor_scores=score_data.get("vendor_scores", {}),
             total_checks=score_data["total_checks"],
             passed_checks=score_data["passed_checks"],
             failed_checks=score_data["failed_checks"],
+            run_at=results[0].run_at.isoformat() if results and hasattr(results[0], "run_at") and results[0].run_at else None
         )

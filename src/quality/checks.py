@@ -175,85 +175,103 @@ class DQRunner:
 
     # ─── 5. CONSISTENCY (Cross-source Entity Matching) ─────────────
 
-    def check_consistency(self):
-        """Fuzzy matching zawodników FBref → Understat."""
-        logger.info("── Consistency checks (cross-source) ──")
+    def check_consistency(self, ground_truth: str = "fbref"):
+        """Fuzzy matching zawodników Vendors → Ground Truth."""
+        logger.info(f"── Consistency checks (Ground Truth: {ground_truth}) ──")
         threshold_pct = DQ_THRESHOLDS["consistency_min_match_pct"]
 
-        fbref_players = [r[0] for r in self.session.query(
+        truth_players = [r[0] for r in self.session.query(
             PlayerMatchStats.player_name
-        ).filter(PlayerMatchStats.source == "fbref").distinct().all()]
+        ).filter(PlayerMatchStats.source == ground_truth).distinct().all()]
 
-        understat_players = [r[0] for r in self.session.query(
-            PlayerMatchStats.player_name
-        ).filter(PlayerMatchStats.source == "understat").distinct().all()]
-
-        if not fbref_players or not understat_players:
+        if not truth_players:
             self._record("cross_source_entity_match", "consistency", False,
-                          details="Brak danych z jednego lub obu źródeł")
+                          details=f"Brak danych z Ground Truth ({ground_truth})")
             return
 
-        matched = 0
+        other_sources = [r[0] for r in self.session.query(
+            PlayerMatchStats.source
+        ).filter(PlayerMatchStats.source != ground_truth).distinct().all()]
+
         THRESHOLD_RATIO = 0.82
 
-        for fb_name in fbref_players:
-            best = 0
-            for un_name in understat_players:
-                score = SequenceMatcher(None, fb_name.lower(), un_name.lower()).ratio()
-                if score > best:
-                    best = score
-                if best >= 1.0:
-                    break
-            if best >= THRESHOLD_RATIO:
-                matched += 1
+        for vendor in other_sources:
+            vendor_players = [r[0] for r in self.session.query(
+                PlayerMatchStats.player_name
+            ).filter(PlayerMatchStats.source == vendor).distinct().all()]
+            
+            if not vendor_players:
+                continue
 
-        match_pct = round((matched / len(fbref_players)) * 100, 2)
-        self._record("cross_source_entity_match", "consistency", match_pct >= threshold_pct,
-                      value=match_pct, threshold=threshold_pct,
-                      table_name="player_match_stats",
-                      details=f"{matched}/{len(fbref_players)} FBref players matched to Understat (fuzzy>{THRESHOLD_RATIO})")
+            matched = 0
+            for vendor_name in vendor_players:
+                best = 0
+                for truth_name in truth_players:
+                    score = SequenceMatcher(None, vendor_name.lower(), truth_name.lower()).ratio()
+                    if score > best:
+                        best = score
+                    if best >= 1.0:
+                        break
+                if best >= THRESHOLD_RATIO:
+                    matched += 1
+
+            match_pct = round((matched / len(vendor_players)) * 100, 2)
+            self._record(f"{vendor}_entity_match", "consistency", match_pct >= threshold_pct,
+                          value=match_pct, threshold=threshold_pct,
+                          table_name="player_match_stats",
+                          details=f"{matched}/{len(vendor_players)} {vendor} players matched to {ground_truth} (fuzzy>{THRESHOLD_RATIO})")
 
     # ─── 6. ACCURACY (Cross-source xG Reconciliation) ──────────────
 
-    def check_accuracy(self):
-        """Porównuje średni xG per zawodnik między FBref a Understat."""
-        logger.info("── Accuracy checks (xG reconciliation) ──")
+    def check_accuracy(self, ground_truth: str = "fbref"):
+        """Porównuje średni xG per zawodnik między Vendors a Ground Truth."""
+        logger.info(f"── Accuracy checks (Ground Truth: {ground_truth}) ──")
         max_delta = DQ_THRESHOLDS["accuracy_max_xg_delta"]
 
-        fbref_xg = {r.player_name: r.avg_xg for r in self.session.query(
+        truth_xg = {r.player_name: r.avg_xg for r in self.session.query(
             PlayerMatchStats.player_name,
             func.avg(PlayerMatchStats.xg).label("avg_xg")
         ).filter(
-            PlayerMatchStats.source == "fbref",
+            PlayerMatchStats.source == ground_truth,
             PlayerMatchStats.xg.isnot(None)
         ).group_by(PlayerMatchStats.player_name).all()}
 
-        understat_xg = {r.player_name: r.avg_xg for r in self.session.query(
-            PlayerMatchStats.player_name,
-            func.avg(PlayerMatchStats.xg).label("avg_xg")
-        ).filter(
-            PlayerMatchStats.source == "understat",
-            PlayerMatchStats.xg.isnot(None)
-        ).group_by(PlayerMatchStats.player_name).all()}
-
-        # Szukamy wspólnych zawodników (exact match nazw – uproszczenie)
-        common = set(fbref_xg.keys()) & set(understat_xg.keys())
-
-        if not common:
-            self._record("xg_cross_source_delta", "accuracy", True,
-                          details="Brak wspólnych zawodników do porównania (po exact match nazw)")
+        if not truth_xg:
+            self._record(f"xg_accuracy_vs_{ground_truth}", "accuracy", True,
+                          details=f"Brak danych xG z Ground Truth ({ground_truth})")
             return
 
-        deltas = []
-        for name in common:
-            delta = abs(fbref_xg[name] - understat_xg[name])
-            deltas.append(delta)
+        other_sources = [r[0] for r in self.session.query(
+            PlayerMatchStats.source
+        ).filter(PlayerMatchStats.source != ground_truth).distinct().all()]
 
-        avg_delta = round(sum(deltas) / len(deltas), 4)
-        self._record("xg_cross_source_delta", "accuracy", avg_delta <= max_delta,
-                      value=avg_delta, threshold=max_delta,
-                      table_name="player_match_stats", column_name="xg",
-                      details=f"Avg |FBref.xG - Understat.xG| = {avg_delta} across {len(common)} common players")
+        for vendor in other_sources:
+            vendor_xg = {r.player_name: r.avg_xg for r in self.session.query(
+                PlayerMatchStats.player_name,
+                func.avg(PlayerMatchStats.xg).label("avg_xg")
+            ).filter(
+                PlayerMatchStats.source == vendor,
+                PlayerMatchStats.xg.isnot(None)
+            ).group_by(PlayerMatchStats.player_name).all()}
+
+            # Uproszczenie: exact match nazw
+            common = set(truth_xg.keys()) & set(vendor_xg.keys())
+
+            if not common:
+                self._record(f"{vendor}_xg_accuracy", "accuracy", True,
+                              details=f"Brak wspólnych zawodników ze statystykami xG dla {vendor} vs {ground_truth}")
+                continue
+
+            deltas = []
+            for name in common:
+                delta = abs(truth_xg[name] - vendor_xg[name])
+                deltas.append(delta)
+
+            avg_delta = round(sum(deltas) / len(deltas), 4)
+            self._record(f"{vendor}_xg_accuracy", "accuracy", avg_delta <= max_delta,
+                          value=avg_delta, threshold=max_delta,
+                          table_name="player_match_stats", column_name="xg",
+                          details=f"Avg |{ground_truth}.xG - {vendor}.xG| = {avg_delta} across {len(common)} common players")
 
     def run_dynamic_rules(self, rules_path: str):
         """Wczytuje i wykonuje dynamiczne reguły DQ z YAML."""
@@ -273,7 +291,7 @@ class DQRunner:
         for rule in rulebook.rules:
             if rule.check == "not_null":
                 col = getattr(PlayerMatchStats, rule.column)
-                null_count = self.session.query(func.count(PlayerMatchStats.id)).filter(col.is_(None)).scalar()
+                null_count = self.session.query(func.count(PlayerMatchStats.id)).filter(col == None).scalar()
                 null_pct = round((null_count / total_stats) * 100, 2)
                 
                 # Assume limit 0 for complete not_null, or apply DQ_THRESHOLDS completeness threshold if we configure it
@@ -289,7 +307,7 @@ class DQRunner:
                 r_max = float(rule.params.get("max", 0.0))
                 
                 out_of_range = self.session.query(func.count(PlayerMatchStats.id)).filter(
-                    col.isnot(None),
+                    col != None,
                     (col < r_min) | (col > r_max)
                 ).scalar()
                 
@@ -326,8 +344,8 @@ class DQRunner:
             self.check_validity()
             self.check_uniqueness()
         self.check_timeliness()
-        self.check_consistency()
-        self.check_accuracy()
+        self.check_consistency(ground_truth="fbref")
+        self.check_accuracy(ground_truth="fbref")
 
         # Persystuj wyniki
         for r in self.results:

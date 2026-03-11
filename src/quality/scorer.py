@@ -66,9 +66,31 @@ def calculate_dq_score(results: list[DQCheckResult]) -> dict:
     total_checks = len(results)
     passed_checks = sum(1 for r in results if r.passed)
 
+    # ─── Szukaj wyników per Vendor ───
+    vendor_stats = {}
+    for r in results:
+        # Metryki consistency = f"{vendor}_entity_match"
+        # Metryki accuracy = f"{vendor}_xg_accuracy"
+        if r.check_name.endswith("_entity_match") and r.check_name != "cross_source_entity_match":
+            vendor = r.check_name.replace("_entity_match", "")
+            if vendor not in vendor_stats: vendor_stats[vendor] = []
+            vendor_stats[vendor].append(100.0 if r.passed else 0.0)
+            
+        elif r.check_name.endswith("_xg_accuracy") and not r.check_name.startswith("xg_accuracy"):
+            vendor = r.check_name.replace("_xg_accuracy", "")
+            if vendor not in vendor_stats: vendor_stats[vendor] = []
+            vendor_stats[vendor].append(100.0 if r.passed else 0.0)
+
+    # Uśrednij wyniki dla vendorów
+    vendor_scores_dict = {}
+    for v_name, v_results in vendor_stats.items():
+        if v_results:
+            vendor_scores_dict[v_name] = round(sum(v_results) / len(v_results), 1)
+
     return {
         "overall_score": overall,
         "dimension_scores": dim_scores,
+        "vendor_scores": vendor_scores_dict,
         "total_checks": total_checks,
         "passed_checks": passed_checks,
         "failed_checks": total_checks - passed_checks,
