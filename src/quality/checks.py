@@ -255,17 +255,76 @@ class DQRunner:
                       table_name="player_match_stats", column_name="xg",
                       details=f"Avg |FBref.xG - Understat.xG| = {avg_delta} across {len(common)} common players")
 
+    def run_dynamic_rules(self, rules_path: str):
+        """Wczytuje i wykonuje dynamiczne reguły DQ z YAML."""
+        logger.info(f"── Dynamic rules from {rules_path} ──")
+        try:
+            from src.quality.rule_parser import parse_rules
+            rulebook = parse_rules(rules_path)
+        except Exception as e:
+            logger.error(f"Failed to load dynamic rules: {e}")
+            return
+
+        total_stats = self.session.query(func.count(PlayerMatchStats.id)).scalar()
+        if total_stats == 0:
+            logger.warning("No data in player_match_stats to run dynamic rules.")
+            return
+
+        for rule in rulebook.rules:
+            if rule.check == "not_null":
+                col = getattr(PlayerMatchStats, rule.column)
+                null_count = self.session.query(func.count(PlayerMatchStats.id)).filter(col.is_(None)).scalar()
+                null_pct = round((null_count / total_stats) * 100, 2)
+                
+                # Assume limit 0 for complete not_null, or apply DQ_THRESHOLDS completeness threshold if we configure it
+                passed = null_count == 0
+                self._record(rule.name, rule.dimension, passed,
+                             value=null_pct, threshold=0.0,
+                             table_name="player_match_stats", column_name=rule.column,
+                             details=f"{null_count}/{total_stats} null values ({null_pct}%)")
+
+            elif rule.check == "between":
+                col = getattr(PlayerMatchStats, rule.column)
+                r_min = float(rule.params.get("min", 0.0))
+                r_max = float(rule.params.get("max", 0.0))
+                
+                out_of_range = self.session.query(func.count(PlayerMatchStats.id)).filter(
+                    col.isnot(None),
+                    (col < r_min) | (col > r_max)
+                ).scalar()
+                
+                pct_invalid = round((out_of_range / total_stats) * 100, 2)
+                self._record(rule.name, rule.dimension, out_of_range == 0,
+                             value=pct_invalid, threshold=0.0,
+                             table_name="player_match_stats", column_name=rule.column,
+                             details=f"{out_of_range}/{total_stats} values out of [{r_min}, {r_max}]")
+
+            elif rule.check == "unique_combination":
+                cols = [getattr(PlayerMatchStats, c) for c in rule.columns]
+                dupes = self.session.query(*cols, func.count(PlayerMatchStats.id).label("cnt")) \
+                    .group_by(*cols) \
+                    .having(func.count(PlayerMatchStats.id) > 1).all()
+                
+                dupe_count = len(dupes)
+                self._record(rule.name, rule.dimension, dupe_count == 0,
+                             value=float(dupe_count), threshold=0.0,
+                             table_name="player_match_stats",
+                             details=f"{dupe_count} duplicate combinations found for {rule.columns}")
+
     # ─── RUN ALL ───────────────────────────────────────────────────
 
-    def run_all(self) -> list[DQCheckResult]:
+    def run_all(self, yaml_rules_path: str = None) -> list[DQCheckResult]:
         """Uruchamia wszystkie sprawdzenia i zapisuje wyniki do DB."""
         logger.info("╔══════════════════════════════════════════╗")
         logger.info("║   Data Quality Pipeline – START          ║")
         logger.info("╚══════════════════════════════════════════╝")
 
-        self.check_completeness()
-        self.check_validity()
-        self.check_uniqueness()
+        if yaml_rules_path:
+            self.run_dynamic_rules(yaml_rules_path)
+        else:
+            self.check_completeness()
+            self.check_validity()
+            self.check_uniqueness()
         self.check_timeliness()
         self.check_consistency()
         self.check_accuracy()
