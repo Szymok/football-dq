@@ -1,0 +1,30 @@
+[workspace]
+members = [
+    "crates/api",
+    "crates/core",
+    "crates/cli",
+    "crates/extractors"
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Szymon <email@example.com>"]
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+tokio = { version = "1.36", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite"] }
+axum = "0.7"
+clap = { version = "4.5", features = ["derive"] }
+tracing = "0.1"
+anyhow = "1.0"
+thiserror = "1.0"
+
+[profile.release]
+opt-level = 3
+lto = true

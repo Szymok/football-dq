@@ -1,53 +1,37 @@
 @import "tailwindcss";
 
 @theme {
-  --color-pitch: #040508;
-  --color-tunnel: #0a0c10;
-  --color-surface: #0f1115;
-  --color-sideline: #1a1d24;
-  --color-highlight: #2a3040;
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-border: #e2e8f0;
   
-  --color-volt: #ccff00;
-  --color-amber: #ff4500;
-  --color-red: #ff003c;
-  
-  --color-primary-text: #ffffff;
-  --color-secondary-text: #8b949e;
-  --color-muted-text: #484f58;
+  --color-text-main: #0f172a;
+  --color-text-muted: #64748b;
 
-  --font-display: "Outfit", sans-serif;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-brand: #2563eb;
+
+  --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 }
 
 @layer base {
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
   :root {
-    background-color: var(--color-pitch);
-    color: var(--color-primary-text);
+    background-color: var(--color-bg);
+    color: var(--color-text-main);
   }
 
   body {
     margin: 0;
-    font-family: var(--font-display);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-image: radial-gradient(circle at 50% 0%, #11151c 0%, transparent 60%);
-    background-attachment: fixed;
-  }
-
-  /* Custom scrollbar for an industrial look */
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: var(--color-pitch);
-  }
-  ::-webkit-scrollbar-thumb {
-    background: var(--color-sideline);
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-muted-text);
   }
 }
+
+
 

@@ -1,0 +1,16 @@
+[package]
+name = "api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+core = { path = "../core" }
+axum.workspace = true
+tokio.workspace = true
+serde.workspace = true
+tracing.workspace = true
+sqlx.workspace = true
+anyhow.workspace = true

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchScorecard } from './api'
-import { Activity, Database, CheckSquare, Settings2, ShieldAlert, Cpu, TerminalSquare } from 'lucide-react'
+import { Activity, Database, CheckSquare, Settings2, ShieldAlert, Cpu, BarChart3, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 // Types
 type DQRun = {
@@ -17,102 +17,56 @@ type DQRun = {
 const ScoreRing = ({ score }: { score: number }) => {
   const isPass = score >= 80
   const isWarn = score >= 50 && score < 80
-  const colorClass = isPass ? 'text-[var(--color-volt)]' : isWarn ? 'text-[var(--color-amber)]' : 'text-[var(--color-red)]'
+  const colorClass = isPass ? 'text-[var(--color-success)]' : isWarn ? 'text-[var(--color-warning)]' : 'text-[var(--color-danger)]'
   
-  const radius = 120
+  const radius = 60
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - (score / 100) * circumference
 
   return (
-    <div className="relative flex flex-col items-center justify-center p-0">
-      <div className="relative h-80 w-80">
-        <svg className="h-full w-full rotate-[-90deg] transform" viewBox="0 0 280 280">
+    <div className="relative flex flex-col items-center justify-center p-6 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-sm h-full">
+      <h3 className="text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-6">Overall Data Quality</h3>
+      <div className="relative h-40 w-40">
+        <svg className="h-full w-full rotate-[-90deg] transform" viewBox="0 0 140 140">
+          <circle cx="70" cy="70" r={radius} fill="none" stroke="var(--color-border)" strokeWidth="12" />
           <circle
-            cx="140"
-            cy="140"
+            cx="70"
+            cy="70"
             r={radius}
             fill="none"
-            stroke="var(--color-surface)"
-            strokeWidth="2"
-          />
-          <circle
-            cx="140"
-            cy="140"
-            r={radius - 16}
-            fill="none"
-            stroke="var(--color-sideline)"
-            strokeWidth="1"
-            strokeDasharray="4 4"
-          />
-          {/* Progress circle */}
-          <defs>
-            <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="12" result="blur1" />
-              <feGaussianBlur stdDeviation="24" result="blur2" />
-              <feMerge>
-                <feMergeNode in="blur2" />
-                <feMergeNode in="blur1" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-          <circle
-            cx="140"
-            cy="140"
-            r={radius}
-            fill="none"
-            className={`transition-all duration-1000 ease-out ${colorClass}`}
+            className={`transition-all duration-1000 ease-out flex ${colorClass}`}
             stroke="currentColor"
-            strokeWidth="4"
-            strokeLinecap="square"
+            strokeWidth="12"
+            strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
-            filter="url(#neonGlow)"
-          />
-          {/* Inner accent ring */}
-          <circle
-             cx="140"
-             cy="140"
-             r={radius - 8}
-             fill="none"
-             className={`${colorClass}`}
-             stroke="currentColor"
-             strokeWidth="1"
-             strokeDasharray={circumference}
-             strokeDashoffset={strokeDashoffset}
-             opacity="0.5"
           />
         </svg>
-        
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-[5.5rem] leading-none font-display font-black tracking-tighter ${colorClass} drop-shadow-[0_0_15px_currentColor]`}>
-            {score.toFixed(1)}
+          <span className={`text-4xl font-bold tracking-tight text-[var(--color-text-main)]`}>
+            {score.toFixed(1)}<span className="text-2xl text-[var(--color-text-muted)] ml-0.5">%</span>
           </span>
-          <span className="text-xl font-mono text-[var(--color-secondary-text)] tracking-tight">PERCENT</span>
         </div>
-      </div>
-      <div className="mt-8 text-xs font-mono uppercase tracking-[0.2em] text-[var(--color-muted-text)] flex items-center gap-2 border border-[var(--color-sideline)] px-4 py-1.5 bg-[var(--color-surface)]">
-        <Activity className="w-3 h-3 text-[var(--color-volt)] animate-pulse" />
-        System Vitality
       </div>
     </div>
   )
 }
 
-const MetricBlock = ({ label, value, icon: Icon, unit = '' }: any) => (
-  <div className="border-t border-r border-[var(--color-sideline)] p-6 bg-[var(--color-pitch)]/50 backdrop-blur-sm group hover:bg-[var(--color-surface)] transition-colors grid grid-rows-[auto_1fr] relative overflow-hidden">
-    <div className="absolute top-0 right-0 w-8 h-8 bg-[var(--color-sideline)] opacity-0 group-hover:opacity-100 transition-opacity clip-path-triangle" style={{ clipPath: 'polygon(100% 0, 0 0, 100% 100%)' }} />
-    <div className="flex justify-between items-start mb-6">
-      <div className="text-xs font-mono uppercase tracking-[0.05em] text-[var(--color-secondary-text)]">
+const MetricCard = ({ label, value, icon: Icon, unit = '' }: any) => (
+  <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 shadow-sm flex flex-col justify-between h-full">
+    <div className="flex justify-between items-start mb-4">
+      <div className="text-sm font-medium text-[var(--color-text-muted)]">
         {label}
       </div>
-      <Icon className="w-4 h-4 text-[var(--color-muted-text)] group-hover:text-[var(--color-volt)] transition-colors" />
+      <div className="p-2 bg-[var(--color-bg)] rounded-lg">
+        <Icon className="w-5 h-5 text-[var(--color-brand)]" />
+      </div>
     </div>
     <div className="flex items-baseline gap-2 mt-auto">
-      <span className="text-5xl font-display font-medium tracking-tight text-[var(--color-primary-text)]">
+      <span className="text-4xl font-bold tracking-tight text-[var(--color-text-main)]">
         {value}
       </span>
-      {unit && <span className="text-sm font-mono text-[var(--color-muted-text)]">{unit}</span>}
+      {unit && <span className="text-sm font-medium text-[var(--color-text-muted)]">{unit}</span>}
     </div>
   </div>
 )
@@ -122,53 +76,48 @@ const VendorLeaderboard = ({ vendorScores = {} }: { vendorScores: Record<string,
 
   if (entries.length === 0) {
     return (
-      <div className="mt-8 border border-[var(--color-red)] bg-red-950/20 p-6">
-        <div className="text-xs font-mono text-[var(--color-red)] uppercase tracking-widest flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4" /> Data Stream Offline
+      <div className="mt-8 bg-red-50 border border-red-200 rounded-xl p-6">
+        <div className="text-sm font-medium text-red-600 flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" /> No vendor data available
         </div>
       </div>
     )
   }
 
   return (
-    <div className="mt-12 border border-[var(--color-sideline)] bg-[var(--color-tunnel)]">
-      <div className="border-b border-[var(--color-sideline)] p-4 flex justify-between items-center bg-[var(--color-surface)]">
-        <h3 className="text-sm font-mono tracking-widest uppercase text-[var(--color-primary-text)] flex items-center gap-2">
-          <TerminalSquare className="w-4 h-4 text-[var(--color-volt)]" />
-          Extraction Precision Matrix
+    <div className="mt-6 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-sm overflow-hidden">
+      <div className="border-b border-[var(--color-border)] px-6 py-5 flex justify-between items-center bg-[var(--color-bg)]/50">
+        <h3 className="text-base font-semibold text-[var(--color-text-main)] flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-[var(--color-text-muted)]" />
+          Provider Accuracy Comparison
         </h3>
-        <span className="text-xs font-mono text-[var(--color-secondary-text)] bg-[var(--color-pitch)] px-2 py-1 border border-[var(--color-sideline)]">
-          BASELINE: FBREF
+        <span className="text-xs font-medium text-[var(--color-text-muted)] bg-[var(--color-surface)] px-2.5 py-1 rounded border border-[var(--color-border)]">
+          Baseline: fbref
         </span>
       </div>
 
-      <div className="p-0">
+      <div className="divide-y divide-[var(--color-border)]">
         {entries.map(([vendor, score], idx) => {
           const isPass = score >= 80;
-          const barColor = isPass ? 'var(--color-volt)' : (score >= 50 ? 'var(--color-amber)' : 'var(--color-red)');
+          const barColor = isPass ? 'var(--color-success)' : (score >= 50 ? 'var(--color-warning)' : 'var(--color-danger)');
           
           return (
-            <div key={vendor} className="group flex items-center border-b border-[var(--color-sideline)] last:border-0 hover:bg-[var(--color-surface)] transition-colors">
-              <div className="w-12 h-16 flex items-center justify-center border-r border-[var(--color-sideline)] font-mono text-xs text-[var(--color-muted-text)]">
-                {String(idx + 1).padStart(2, '0')}
+            <div key={vendor} className="flex items-center px-6 py-5 hover:bg-[var(--color-bg)]/50 transition-colors">
+              <div className="w-8 font-mono text-sm text-[var(--color-text-muted)]">
+                {idx + 1}.
               </div>
-              <div className="w-48 pl-6 font-display font-bold text-lg tracking-wide uppercase">
+              <div className="w-48 font-medium text-[var(--color-text-main)] capitalize">
                 {vendor}
               </div>
-              <div className="flex-1 px-8 relative h-16 flex items-center">
-                {/* Harsh technical progress bar */}
-                <div className="w-full h-[2px] bg-[var(--color-sideline)] relative">
+              <div className="flex-1 px-4 relative h-8 flex items-center">
+                <div className="w-full h-2.5 bg-[var(--color-border)] rounded-full overflow-hidden">
                   <div 
-                    className="absolute top-0 left-0 h-full transition-all duration-1000 ease-out z-10" 
-                    style={{ width: `${score}%`, backgroundColor: barColor, boxShadow: `0 0 8px ${barColor}` }}
+                    className="h-full transition-all duration-1000 ease-out" 
+                    style={{ width: `${score}%`, backgroundColor: barColor }}
                   />
-                  {/* Marker lines for data-vis feel */}
-                  <div className="absolute top-[-4px] left-[25%] w-[1px] h-[10px] bg-[var(--color-muted-text)]" />
-                  <div className="absolute top-[-4px] left-[50%] w-[1px] h-[10px] bg-[var(--color-muted-text)]" />
-                  <div className="absolute top-[-4px] left-[75%] w-[1px] h-[10px] bg-[var(--color-muted-text)]" />
                 </div>
               </div>
-              <div className="w-24 text-right pr-6 font-mono text-xl font-medium" style={{ color: barColor }}>
+              <div className="w-20 text-right font-mono text-sm font-medium text-[var(--color-text-main)]">
                 {score.toFixed(1)}%
               </div>
             </div>
@@ -194,18 +143,17 @@ export default function App() {
   const renderContent = () => {
     if (activeTab === 'operations') {
       return (
-        <div className="border border-[var(--color-sideline)] bg-[var(--color-tunnel)] p-8">
-          <h2 className="text-2xl font-display font-black tracking-tight mb-4 flex items-center gap-3">
-             <Cpu className="text-[var(--color-volt)]" />
-             Core Operations
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-8 shadow-sm">
+          <h2 className="text-2xl font-bold tracking-tight mb-3 text-[var(--color-text-main)] flex items-center gap-3">
+             <Cpu className="text-[var(--color-brand)] w-6 h-6" />
+             Pipeline Operations
           </h2>
-          <p className="text-[var(--color-secondary-text)] font-mono text-sm max-w-2xl mb-8">
+          <p className="text-[var(--color-text-muted)] text-base max-w-2xl mb-8">
             Manage data source pipelines, trigger manual reconciliation merges, and monitor ingestion queues.
           </p>
-          <div className="border border-[var(--color-sideline)] bg-[var(--color-pitch)] p-6 font-mono text-sm text-[var(--color-muted-text)]">
-            &gt; SYSTEM_READY
-            <br />
-            &gt; WAITING_FOR_OPERATOR_INPUT...
+          <div className="bg-[#0f172a] border border-[var(--color-border)] rounded-lg p-6 font-mono text-sm text-gray-300">
+            $ systemctl status data-pipeline<br />
+            <span className="text-[var(--color-success)]">&gt; Active and running...</span>
           </div>
         </div>
       );
@@ -213,136 +161,115 @@ export default function App() {
 
     if (activeTab === 'validation') {
       return (
-        <div className="border border-[var(--color-sideline)] bg-[var(--color-tunnel)] p-8">
-          <h2 className="text-2xl font-display font-black tracking-tight mb-4 flex items-center gap-3">
-             <CheckSquare className="text-[var(--color-volt)]" />
-             Validation Matrix
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-8 shadow-sm">
+          <h2 className="text-2xl font-bold tracking-tight mb-3 text-[var(--color-text-main)] flex items-center gap-3">
+             <CheckSquare className="text-[var(--color-brand)] w-6 h-6" />
+             Validation Rules
           </h2>
-          <p className="text-[var(--color-secondary-text)] font-mono text-sm max-w-2xl mb-8">
+          <p className="text-[var(--color-text-muted)] text-base max-w-2xl mb-8">
             Detailed breakdown of data quality checks, constraint violations, and statistical anomalies.
           </p>
-          <div className="border border-[var(--color-sideline)] bg-[var(--color-pitch)] p-6 font-mono text-sm text-[var(--color-volt)] flex w-full justify-between items-center opacity-70">
-             <span>NO_ACTIVE_VIOLATIONS_DETECTED</span>
-             <ShieldAlert className="w-5 h-5 text-[var(--color-volt)] animate-pulse" />
+          <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-6 flex items-center gap-3 text-emerald-700">
+             <CheckCircle2 className="w-6 h-6" />
+             <span className="font-medium">All validation rules passing successfully.</span>
           </div>
         </div>
       );
     }
 
-    // Default to scorecard
     return (
-      <div className="space-y-12 animate-in fade-in duration-500">
-        {/* Top Grid - Focus on Hero Asset vs KPIs */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 border border-[var(--color-sideline)] bg-[var(--color-tunnel)]">
-          
-          {/* Massive Hero Radial left-aligned */}
-          <div className="lg:col-span-5 border-r border-[var(--color-sideline)] p-12 flex items-center justify-center bg-[var(--color-pitch)] relative overflow-hidden">
-            {/* Aesthetic background noise / grid */}
-            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMzMzMiLz48L3N2Zz4=')] opacity-20 mask-image:linear-gradient(to_bottom,black,transparent)" style={{ WebkitMaskImage: 'radial-gradient(black, transparent)' }} />
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 auto-rows-fr">
+          <div className="lg:col-span-1 h-full">
             <ScoreRing score={run?.overall_score ?? 0} />
           </div>
 
-          {/* Data Dense KPIs */}
-          <div className="lg:col-span-7 grid grid-cols-2 grid-rows-2">
-            <MetricBlock 
+          <div className="lg:col-span-2 grid grid-cols-2 gap-6 h-full">
+            <MetricCard 
               label="Checks Executed" 
               value={run?.total_checks ?? 0} 
               icon={Settings2} 
             />
-            <MetricBlock 
+            <MetricCard 
               label="Anomaly Count" 
               value={(run?.total_checks ?? 0) - (run?.passed_checks ?? 0)} 
               icon={ShieldAlert}
-              unit="FLAGS"
+              unit="issues"
             />
-            <div className="col-span-2 border-t border-[var(--color-sideline)] p-6 bg-[var(--color-surface)] flex justify-between items-center">
-              <div className="flex flex-col gap-1">
-                 <span className="text-[0.65rem] font-mono uppercase tracking-widest text-[var(--color-muted-text)]">Last Synchronized</span>
-                 <span className="font-mono text-sm text-[var(--color-primary-text)]">
-                   {run?.run_at ? new Date(run.run_at + "Z").toISOString().replace('T', ' ').substring(0, 19) : 'UNKNOWN'}
-                 </span>
-              </div>
-              <div className="px-3 py-1.5 border border-[var(--color-volt)] text-[var(--color-volt)] text-[0.65rem] font-mono uppercase tracking-widest">
-                Telemetry Active
-              </div>
-            </div>
           </div>
-
         </div>
 
-        {/* Vendor Leaderboard Section */}
         <VendorLeaderboard vendorScores={run?.vendor_scores || {}} />
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen flex text-[var(--color-primary-text)] selection:bg-[var(--color-volt)] selection:text-black">
+    <div className="min-h-screen bg-[var(--color-bg)] flex text-[var(--color-text-main)]">
       
-      {/* Sidebar - Brutalist Vertical Strip */}
-      <aside className="fixed w-20 h-full border-r border-[var(--color-sideline)] bg-[var(--color-pitch)] flex flex-col items-center py-8 z-50">
-        <div className="h-12 w-12 border border-[var(--color-volt)] bg-[var(--color-volt)]/10 flex items-center justify-center rotate-45 mb-16 shadow-[0_0_15px_var(--color-volt)]">
-          <Database className="w-5 h-5 text-[var(--color-volt)] -rotate-45" />
+      {/* Sidebar */}
+      <aside className="fixed w-20 h-full bg-[var(--color-surface)] border-r border-[var(--color-border)] flex flex-col items-center py-6 z-50 shadow-sm">
+        <div className="h-10 w-10 bg-[var(--color-brand)] rounded-xl flex items-center justify-center mb-12 shadow-md shadow-blue-500/20">
+          <Database className="w-5 h-5 text-white" />
         </div>
         
-        <nav className="flex flex-col gap-8 opacity-50">
+        <nav className="flex flex-col gap-4 w-full px-3">
           <button 
             onClick={() => setActiveTab('scorecard')}
-            className={`w-8 h-8 flex items-center justify-center transition-opacity cursor-pointer ${activeTab === 'scorecard' ? 'opacity-100 border-b-2 border-[var(--color-volt)] text-[var(--color-primary-text)]' : 'hover:opacity-100'}`}
+            title="Scorecard"
+            className={`w-full aspect-square flex items-center justify-center rounded-xl transition-all ${activeTab === 'scorecard' ? 'bg-[var(--color-bg)] text-[var(--color-brand)] shadow-sm border border-[var(--color-border)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text-main)]'}`}
           >
              <Activity className="w-5 h-5" />
           </button>
           <button 
             onClick={() => setActiveTab('operations')}
-            className={`w-8 h-8 flex items-center justify-center transition-opacity cursor-pointer ${activeTab === 'operations' ? 'opacity-100 border-b-2 border-[var(--color-volt)] text-[var(--color-primary-text)]' : 'hover:opacity-100'}`}
+            title="Pipeline Operations"
+            className={`w-full aspect-square flex items-center justify-center rounded-xl transition-all ${activeTab === 'operations' ? 'bg-[var(--color-bg)] text-[var(--color-brand)] shadow-sm border border-[var(--color-border)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text-main)]'}`}
           >
              <Cpu className="w-5 h-5" />
           </button>
           <button 
             onClick={() => setActiveTab('validation')}
-            className={`w-8 h-8 flex items-center justify-center transition-opacity cursor-pointer ${activeTab === 'validation' ? 'opacity-100 border-b-2 border-[var(--color-volt)] text-[var(--color-primary-text)]' : 'hover:opacity-100'}`}
+            title="Validation Rules"
+            className={`w-full aspect-square flex items-center justify-center rounded-xl transition-all ${activeTab === 'validation' ? 'bg-[var(--color-bg)] text-[var(--color-brand)] shadow-sm border border-[var(--color-border)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text-main)]'}`}
           >
              <CheckSquare className="w-5 h-5" />
           </button>
         </nav>
       </aside>
 
-      {/* Main Container */}
-      <main className="ml-20 flex-1 p-8 lg:p-16 max-w-7xl mx-auto">
-        <header className="mb-16 border-b border-[var(--color-sideline)] pb-8 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-6">
+      {/* Main Content */}
+      <main className="ml-20 flex-1 p-8 lg:p-12 max-w-6xl mx-auto w-full">
+        <header className="mb-10 flex flex-col lg:flex-row lg:justify-between lg:items-end gap-6 border-b border-[var(--color-border)] pb-6">
           <div>
-            <h1 className="text-6xl font-display font-black tracking-tighter uppercase leading-[0.85]">
-              Data Quality <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--color-volt)] to-[var(--color-primary-text)]">
-                Scorecard
+            <div className="flex items-center gap-3 mb-2">
+              <span className="flex items-center gap-2 bg-emerald-100/80 text-emerald-700 font-semibold text-xs px-2.5 py-1 rounded-full border border-emerald-200">
+                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                 Live System
               </span>
-            </h1>
-            <div className="mt-6 flex items-center gap-4 text-xs font-mono uppercase tracking-widest text-[var(--color-secondary-text)]">
-              <span className="flex items-center gap-2 border border-[var(--color-sideline)] px-3 py-1 bg-[var(--color-surface)]">
-                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-volt)] animate-pulse" />
-                 LIVE
-              </span>
-              <span>FOOTBALL_DATA_HQ</span>
+              <span className="text-[var(--color-text-muted)] text-sm font-medium">Football Data HQ</span>
             </div>
+            <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text-main)]">
+              Data Quality Scorecard
+            </h1>
           </div>
           
-          <div className="text-right flex flex-col items-end">
-             <div className="text-[0.65rem] font-mono tracking-[0.2em] text-[var(--color-muted-text)] mb-2 uppercase">Endpoint Stream</div>
-             <div className="font-mono text-sm px-4 py-2 border border-[var(--color-sideline)] bg-[var(--color-tunnel)] text-[var(--color-primary-text)]">
-               ws://127.0.0.1:8000/stream
+          <div className="text-right flex flex-col items-start lg:items-end">
+             <div className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-1.5">Last Sync</div>
+             <div className="text-sm font-medium text-[var(--color-text-main)]">
+               {run?.run_at ? new Date(run.run_at + "Z").toLocaleString() : 'Loading...'}
              </div>
           </div>
         </header>
 
         {loading ? (
-          <div className="flex gap-4 items-center">
-            <div className="w-6 h-6 border-2 border-[var(--color-volt)] border-t-transparent animate-spin rounded-full"></div>
-            <span className="font-mono text-sm uppercase tracking-widest text-[var(--color-secondary-text)]">Initializing Data Pipeline...</span>
+          <div className="flex flex-col items-center justify-center p-24 text-[var(--color-text-muted)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-sm">
+            <div className="w-10 h-10 border-[3px] border-[var(--color-border)] border-t-[var(--color-brand)] animate-spin rounded-full mb-6"></div>
+            <span className="text-base font-medium">Aggregating Data Quality Metrics...</span>
           </div>
         ) : (
           renderContent()
         )}
-
       </main>
     </div>
   )

@@ -1,0 +1,16 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+core = { path = "../core" }
+extractors = { path = "../extractors" }
+api = { path = "../api" }
+tokio.workspace = true
+clap.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
