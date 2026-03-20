@@ -1,28 +1,25 @@
-use axum::{routing::get, Router, extract::State};
-use domain::db::DbStore;
+use axum::{routing::get, Router};
 use std::net::SocketAddr;
 use std::sync::Arc;
-
-struct AppState {
-    db: Arc<DbStore>,
-}
+use tower_http::cors::{CorsLayer, Any};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     tracing::info!("Initializing SQLite database connection...");
-    // Connect to SQLite database used in python PoC
-    let db = DbStore::new("sqlite://football_dq.db").await?;
-    db.init_schema().await?;
-    
-    let state = Arc::new(AppState {
-        db: Arc::new(db),
-    });
+    let pool = domain::db::init_db("sqlite:football-dq.db").await?;
+
+    let state = Arc::new(api::server::ApiState { pool });
+
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
 
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/api/dq/reports", get(dq_reports))
+        .layer(cors)
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
@@ -36,10 +33,4 @@ async fn main() -> anyhow::Result<()> {
 
 async fn health_check() -> &'static str {
     "OK"
-}
-
-// Endpoint serwujący wyliczone metryki dla frontendu w React
-async fn dq_reports(State(_state): State<Arc<AppState>>) -> axum::Json<Vec<domain::models::DataQualityMetric>> {
-    // TODO: Fetch existing metrics from DB
-    axum::Json(vec![])
 }

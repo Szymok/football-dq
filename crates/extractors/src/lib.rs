@@ -9,6 +9,7 @@ pub mod sofascore;
 pub mod sofifa;
 pub mod understat;
 pub mod whoscored;
+pub mod parsers;
 
 
 use anyhow::Result;

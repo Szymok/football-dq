@@ -11,7 +11,11 @@ impl Default for MatchLinker {
 }
 
 impl MatchLinker {
-    pub fn new(threshold: f64) -> Self {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_threshold(threshold: f64) -> Self {
         Self { threshold }
     }
 
@@ -34,7 +38,7 @@ impl MatchLinker {
     }
 
     /// Wycina często spotykane "śmieci" oszukujące algorytmy podobieństwa np "FC", "Utd"
-    fn normalize(name: &str) -> String {
+    pub fn normalize(name: &str) -> String {
         name.to_lowercase()
             .replace(" fc", "")
             .replace(" cf", "")

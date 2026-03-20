@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { fetchScorecard } from './api'
-import { Activity, Database, CheckSquare, Settings2, ShieldAlert, Cpu, BarChart3, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { fetchScorecard, fetchLinkedMatches, fetchDqSummary, type LinkedMatch, type DqSummary } from './api'
+import { Activity, Database, CheckSquare, Settings2, ShieldAlert, Cpu, BarChart3, AlertCircle, CheckCircle2, Link2 } from 'lucide-react'
 
 // Types
 type DQRun = {
@@ -131,7 +131,11 @@ const VendorLeaderboard = ({ vendorScores = {} }: { vendorScores: Record<string,
 export default function App() {
   const [run, setRun] = useState<DQRun | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'scorecard' | 'operations' | 'validation'>('scorecard')
+  const [activeTab, setActiveTab] = useState<'scorecard' | 'operations' | 'validation' | 'reconciliation'>('reconciliation')
+  const [linkedMatches, setLinkedMatches] = useState<LinkedMatch[]>([])
+  const [dqSummary, setDqSummary] = useState<DqSummary | null>(null)
+  const [reconLoading, setReconLoading] = useState(false)
+  const [teamFilter, setTeamFilter] = useState('')
 
   useEffect(() => {
     fetchScorecard().then((data) => {
@@ -140,7 +144,135 @@ export default function App() {
     })
   }, [])
 
+  useEffect(() => {
+    if (activeTab === 'reconciliation' && linkedMatches.length === 0) {
+      setReconLoading(true)
+      Promise.all([fetchLinkedMatches(), fetchDqSummary()]).then(([matches, summary]) => {
+        setLinkedMatches(matches)
+        setDqSummary(summary)
+        setReconLoading(false)
+      })
+    }
+  }, [activeTab])
+
   const renderContent = () => {
+    if (activeTab === 'reconciliation') {
+      const filteredMatches = teamFilter 
+        ? linkedMatches.filter(m => 
+            m.home_team_canonical.toLowerCase().includes(teamFilter.toLowerCase()) ||
+            m.away_team_canonical.toLowerCase().includes(teamFilter.toLowerCase())
+          )
+        : linkedMatches;
+
+      return (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 shadow-sm">
+              <div className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">Total Matches</div>
+              <div className="text-3xl font-bold text-[var(--color-text-main)]">{dqSummary?.total_matches ?? '—'}</div>
+            </div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 shadow-sm">
+              <div className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">Multi-Source</div>
+              <div className="text-3xl font-bold text-blue-500">{dqSummary?.multi_source_matches ?? '—'}</div>
+            </div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 shadow-sm">
+              <div className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">Score Agreement</div>
+              <div className="text-3xl font-bold text-emerald-500">{dqSummary?.score_agreement_pct?.toFixed(1) ?? '—'}%</div>
+            </div>
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 shadow-sm">
+              <div className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">Avg xG Diff</div>
+              <div className="text-3xl font-bold text-amber-500">{dqSummary?.avg_xg_discrepancy?.toFixed(3) ?? 'N/A'}</div>
+            </div>
+          </div>
+
+          {/* Filter */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 shadow-sm flex items-center gap-4">
+            <input 
+              type="text" 
+              placeholder="Filter by team name..." 
+              value={teamFilter}
+              onChange={e => setTeamFilter(e.target.value)}
+              className="flex-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg px-4 py-2.5 text-sm text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:border-transparent"
+            />
+            <span className="text-sm text-[var(--color-text-muted)]">{filteredMatches.length} matches</span>
+          </div>
+
+          {/* Match Table */}
+          {reconLoading ? (
+            <div className="flex flex-col items-center justify-center p-16 text-[var(--color-text-muted)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-sm">
+              <div className="w-10 h-10 border-[3px] border-[var(--color-border)] border-t-[var(--color-brand)] animate-spin rounded-full mb-6"></div>
+              <span className="text-base font-medium">Loading linked matches...</span>
+            </div>
+          ) : (
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+                      <th className="text-left px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Date</th>
+                      <th className="text-left px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Home</th>
+                      <th className="text-center px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Score</th>
+                      <th className="text-left px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Away</th>
+                      <th className="text-center px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Sources</th>
+                      <th className="text-center px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Status</th>
+                      <th className="text-center px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">xG Diff</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMatches.slice(0, 100).map((m) => {
+                      const sources = JSON.parse(m.sources_json || '[]');
+                      const sourceNames: string[] = sources.map((s: any) => s.source);
+                      return (
+                        <tr key={m.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-bg)] transition-colors">
+                          <td className="px-4 py-3 text-[var(--color-text-muted)] font-mono text-xs">{m.date}</td>
+                          <td className="px-4 py-3 font-medium text-[var(--color-text-main)]">{m.home_team_canonical}</td>
+                          <td className="px-4 py-3 text-center font-bold text-[var(--color-text-main)]">
+                            {m.home_goals ?? '?'} - {m.away_goals ?? '?'}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-[var(--color-text-main)]">{m.away_team_canonical}</td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex justify-center gap-1 flex-wrap">
+                              {sourceNames.map((s: string) => (
+                                <span key={s} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-blue-100 text-blue-700 border border-blue-200">
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {m.score_agreement ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3" /> OK
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
+                                <AlertCircle className="w-3 h-3" /> Mismatch
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center font-mono text-xs">
+                            {m.xg_discrepancy != null 
+                              ? <span className={m.xg_discrepancy > 0.3 ? 'text-amber-600 font-semibold' : 'text-[var(--color-text-muted)]'}>{m.xg_discrepancy.toFixed(3)}</span>
+                              : <span className="text-[var(--color-text-muted)]">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {filteredMatches.length > 100 && (
+                <div className="px-4 py-3 text-center text-sm text-[var(--color-text-muted)] border-t border-[var(--color-border)]">
+                  Showing first 100 of {filteredMatches.length} matches
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (activeTab === 'operations') {
       return (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-8 shadow-sm">
@@ -234,6 +366,13 @@ export default function App() {
             className={`w-full aspect-square flex items-center justify-center rounded-xl transition-all ${activeTab === 'validation' ? 'bg-[var(--color-bg)] text-[var(--color-brand)] shadow-sm border border-[var(--color-border)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text-main)]'}`}
           >
              <CheckSquare className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => setActiveTab('reconciliation')}
+            title="Reconciliation"
+            className={`w-full aspect-square flex items-center justify-center rounded-xl transition-all ${activeTab === 'reconciliation' ? 'bg-[var(--color-bg)] text-[var(--color-brand)] shadow-sm border border-[var(--color-border)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text-main)]'}`}
+          >
+             <Link2 className="w-5 h-5" />
           </button>
         </nav>
       </aside>

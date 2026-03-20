@@ -16,3 +16,4 @@ csv = "1.4.0"
 serde_json = "1.0.149"
 tracing.workspace = true
 headless_chrome = "1.0.10"
+chrono = "0.4"

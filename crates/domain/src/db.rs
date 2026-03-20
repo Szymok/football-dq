@@ -45,7 +45,23 @@ pub async fn init_db(db_url: &str) -> anyhow::Result<SqlitePool> {
         );"
     ).execute(&pool).await?;
 
-    tracing::info!("✅ SQLite połączony i tabele schematów (raw_extractions, matches_dq) utworzone.");
+    // Tabela: Linked Matches — mecze powiązane między wieloma źródłami
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS linked_matches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            home_team_canonical TEXT NOT NULL,
+            away_team_canonical TEXT NOT NULL,
+            home_goals INTEGER,
+            away_goals INTEGER,
+            sources_json TEXT NOT NULL,
+            score_agreement BOOLEAN NOT NULL DEFAULT 1,
+            xg_discrepancy REAL,
+            linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );"
+    ).execute(&pool).await?;
+
+    tracing::info!("✅ SQLite połączony i tabele schematów (raw_extractions, matches_dq, linked_matches) utworzone.");
 
     Ok(pool)
 }
