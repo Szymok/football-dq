@@ -2,6 +2,7 @@ pub mod fbref;
 pub mod official;
 pub mod clubelo;
 pub mod normalize;
+pub mod espn;
 
 
 use anyhow::Result;
