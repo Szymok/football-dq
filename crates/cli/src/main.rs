@@ -4,7 +4,10 @@ use extractors::understat::{UnderstatExtractor, UnderstatConfig};
 use extractors::whoscored::{WhoscoredExtractor, WhoscoredConfig};
 use extractors::sofascore::{SofascoreExtractor, SofascoreConfig};
 use extractors::matchhistory::{MatchHistoryExtractor, MatchHistoryConfig};
-// reszta ekstraktorów np. ClubElo
+use extractors::clubelo::{ClubEloExtractor, ClubEloConfig};
+use extractors::espn::{EspnExtractor, EspnConfig};
+use extractors::sofifa::{SofifaExtractor, SofifaConfig};
+use extractors::official::OfficialApiExtractor;
 
 #[derive(Parser, Debug)]
 #[command(name = "football-dq")]
@@ -19,15 +22,15 @@ enum Commands {
     /// Pobiera dedykowaną ramkę danych z pojedynczego agregatora
     Sync {
         /// Nazwa agregatora (np. fbref, understat, whoscored)
-        #[arg(short, long)]
+        #[arg(short = 's', long)]
         source: String,
         
         /// Identyfikator ligi (np. EPL, La_Liga)
-        #[arg(short, long)]
+        #[arg(short = 'l', long)]
         league: String,
         
         /// Identyfikator sezonu (np. 2122)
-        #[arg(short, long)]
+        #[arg(short = 'y', long)]
         season: String,
 
         /// Wymusza pobranie z HTTP pomijając pamięć Cache na dysku
@@ -37,10 +40,10 @@ enum Commands {
     
     /// Pobiera całościowy zbiór danego meczu / ligi RÓWNOLEGLE ze wszystkich agregatorów
     SyncAll {
-        #[arg(short, long)]
+        #[arg(short = 'l', long)]
         league: String,
         
-        #[arg(short, long)]
+        #[arg(short = 'y', long)]
         season: String,
     },
     
@@ -114,10 +117,38 @@ async fn main() -> anyhow::Result<()> {
                         ..Default::default()
                     };
                     let extractor = MatchHistoryExtractor::new(Some(config));
+                    let _ = extractor.read_games().await?;
+                },
+                "clubelo" => {
+                    let config = ClubEloConfig {
+                        ..Default::default()
+                    };
+                    let extractor = ClubEloExtractor::new(Some(config));
+                    let _ = extractor.read_team_history("Real Madrid").await?;
+                },
+                "espn" => {
+                    let config = EspnConfig {
+                        leagues: vec![league.clone()],
+                        seasons: vec![season.clone()],
+                        ..Default::default()
+                    };
+                    let extractor = EspnExtractor::new(Some(config));
                     let _ = extractor.read_schedule(force_cache).await?;
                 },
+                "sofifa" => {
+                    let config = SofifaConfig {
+                        leagues: vec![league.clone()],
+                        ..Default::default()
+                    };
+                    let extractor = SofifaExtractor::new(Some(config));
+                    let _ = extractor.read_players(None).await?;
+                },
+                "official" => {
+                    tracing::info!("Inicjalizacja OfficialApiExtractor dla ligi: {}", league);
+                    let _extractor = OfficialApiExtractor::new("http://api.football-data.org/v4/");
+                },
                 _ => {
-                    tracing::error!("Nieznane źródło danych: {}. Dostępne: fbref, understat, whoscored, sofascore, matchhistory", source);
+                    tracing::error!("Nieznane źródło danych: {}. Dostępne: fbref, understat, whoscored, sofascore, matchhistory, clubelo, espn, sofifa, official", source);
                 }
             }
             
@@ -125,7 +156,30 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::SyncAll { league, season } => {
             tracing::info!("Rozpoczęcie szerokopasmowej multiplikacji żądań dla {} ({}) ze wszystkich źródeł...", league, season);
-            tracing::info!("Zakończono...");
+            
+            let fbref = FbrefExtractor::new(Some(FbrefConfig { leagues: vec![league.clone()], seasons: vec![season.clone()], ..Default::default() }));
+            let _ = fbref.read_schedule(false).await;
+
+            let understat = UnderstatExtractor::new(Some(UnderstatConfig { leagues: vec![league.clone()], seasons: vec![season.clone()], ..Default::default() }));
+            let _ = understat.read_schedule(false, false).await;
+
+            let whoscored = WhoscoredExtractor::new(Some(WhoscoredConfig { leagues: vec![league.clone()], seasons: vec![season.clone()], ..Default::default() }));
+            let _ = whoscored.read_schedule(false).await;
+
+            let sofascore = SofascoreExtractor::new(Some(SofascoreConfig { leagues: vec![league.clone()], seasons: vec![season.clone()], ..Default::default() }));
+            let _ = sofascore.read_schedule(false).await;
+
+            let matchhistory_league = if league == "EPL" { "E0".to_string() } else { league.clone() };
+            let mh = MatchHistoryExtractor::new(Some(MatchHistoryConfig { leagues: vec![matchhistory_league], seasons: vec![season.clone()], ..Default::default() }));
+            let _ = mh.read_games().await;
+
+            let espn = EspnExtractor::new(Some(EspnConfig { leagues: vec![league.clone()], seasons: vec![season.clone()], ..Default::default() }));
+            let _ = espn.read_schedule(false).await;
+
+            let sofifa = SofifaExtractor::new(Some(SofifaConfig { leagues: vec![league.clone()], ..Default::default() }));
+            let _ = sofifa.read_players(None).await;
+
+            tracing::info!("Zakończono pobieranie ze wszystkich włączonych modułów.");
         }
         Commands::Reconcile => {
             tracing::info!("Analizowanie drzewa Data Quality. Uruchamianie algorytmu MatchLinker...");
