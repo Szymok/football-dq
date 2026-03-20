@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "crates/api",
-    "crates/core",
+    "crates/domain",
     "crates/cli",
     "crates/extractors"
 ]
@@ -24,6 +24,8 @@ clap = { version = "4.5", features = ["derive"] }
 tracing = "0.1"
 anyhow = "1.0"
 thiserror = "1.0"
+tracing-subscriber = "0.3"
+
 
 [profile.release]
 opt-level = 3

@@ -1,5 +1,5 @@
 use axum::{routing::get, Router, extract::State};
-use core::db::DbStore;
+use domain::db::DbStore;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -39,7 +39,7 @@ async fn health_check() -> &'static str {
 }
 
 // Endpoint serwujący wyliczone metryki dla frontendu w React
-async fn dq_reports(State(_state): State<Arc<AppState>>) -> axum::Json<Vec<core::models::DataQualityMetric>> {
+async fn dq_reports(State(_state): State<Arc<AppState>>) -> axum::Json<Vec<domain::models::DataQualityMetric>> {
     // TODO: Fetch existing metrics from DB
     axum::Json(vec![])
 }

@@ -42,3 +42,8 @@ Thumbs.db
 
 # Great Expectations
 great_expectations/uncommitted/
+
+# Rust
+/target/
+**/*.rs.bk
+

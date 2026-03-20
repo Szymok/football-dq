@@ -2,7 +2,7 @@ pub mod fbref;
 pub mod official;
 
 use anyhow::Result;
-use core::models::Match;
+use domain::models::Match;
 
 pub trait Extractor {
     fn source_name(&self) -> &str;

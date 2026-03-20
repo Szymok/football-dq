@@ -1,6 +1,6 @@
 use crate::Extractor;
 use anyhow::{Result, Context};
-use core::models::Match;
+use domain::models::Match;
 use reqwest::Client;
 
 pub struct FbrefExtractor {
