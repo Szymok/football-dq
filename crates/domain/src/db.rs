@@ -1,63 +1,51 @@
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
-use anyhow::{Result, Context};
-use crate::models::Match;
+use std::path::Path;
 
-pub struct DbStore {
-    pool: SqlitePool,
-}
-
-impl DbStore {
-    pub async fn new(db_url: &str) -> Result<Self> {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(5)
-            .connect(db_url)
-            .await
-            .context("Failed to connect to SQLite database")?;
-        
-        Ok(Self { pool })
+pub async fn init_db(db_url: &str) -> anyhow::Result<SqlitePool> {
+    // Auto-tworzenie pliku dla SQlite MVP pod komendę `cargo run`
+    let path_str = db_url.trim_start_matches("sqlite:");
+    if !Path::new(path_str).exists() {
+        std::fs::File::create(path_str)?;
     }
 
-    pub async fn init_schema(&self) -> Result<()> {
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS matches (
-                id TEXT PRIMARY KEY,
-                date TEXT NOT NULL,
-                home_team TEXT NOT NULL,
-                away_team TEXT NOT NULL,
-                home_score INTEGER NOT NULL,
-                away_score INTEGER NOT NULL,
-                source TEXT NOT NULL
-            );
-            "#
-        )
-        .execute(&self.pool)
-        .await
-        .context("Failed to initialize database schema")?;
-        Ok(())
-    }
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(db_url)
+        .await?;
 
-    pub async fn insert_match(&self, m: &Match) -> Result<()> {
-        sqlx::query(
-            r#"
-            INSERT INTO matches (id, date, home_team, away_team, home_score, away_score, source)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-            ON CONFLICT(id) DO UPDATE SET
-                home_score=excluded.home_score,
-                away_score=excluded.away_score
-            "#
-        )
-        .bind(&m.id)
-        .bind(&m.date)
-        .bind(&m.home_team)
-        .bind(&m.away_team)
-        .bind(m.home_score)
-        .bind(m.away_score)
-        .bind(&m.source)
-        .execute(&self.pool)
-        .await
-        .context("Failed to insert match")?;
-        
-        Ok(())
-    }
+    // Tabela: Surowe zrzuty Cache dla Ekstraktorów HTTP & Selenium
+    // Zapobiega ponownemu odpytywaniu WhoScored lub FBref
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS raw_extractions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            league TEXT NOT NULL,
+            season TEXT NOT NULL,
+            url TEXT NOT NULL,
+            payload_html_json TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );"
+    ).execute(&pool).await?;
+
+    // Tabela: Data Quality Engine (Core)
+    // Agregująca porównania logiki `MatchLinker` dla Frontendu Rusta!
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS matches_dq (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            match_id_fbref TEXT,
+            match_id_understat TEXT,
+            home_team TEXT,
+            away_team TEXT,
+            date TEXT,
+            home_xg_fbref REAL,
+            home_xg_understat REAL,
+            away_xg_fbref REAL,
+            away_xg_understat REAL,
+            flagged_discrepancy BOOLEAN
+        );"
+    ).execute(&pool).await?;
+
+    tracing::info!("✅ SQLite połączony i tabele schematów (raw_extractions, matches_dq) utworzone.");
+
+    Ok(pool)
 }
