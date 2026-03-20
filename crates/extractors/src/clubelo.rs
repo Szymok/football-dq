@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use reqwest::Client;
-use domain::models::ClubEloRow;
 use csv::ReaderBuilder;
 use std::path::{Path, PathBuf};
 use std::fs;
@@ -38,7 +37,7 @@ impl ClubEloExtractor {
     }
 
     /// Pobieranie statystyk ClubElo dla wszystkich drużyn we wskazanym dniu (format YYYY-MM-DD)
-    pub async fn read_by_date(&self, date: &str) -> Result<Vec<ClubEloRow>> {
+    pub async fn read_by_date(&self, date: &str) -> Result<serde_json::Value> {
         let url = format!("{}/{}", self.base_url, date);
         let cache_file = self.config.data_dir.join(format!("{}.csv", date));
         
@@ -46,7 +45,7 @@ impl ClubEloExtractor {
     }
 
     /// Pobieranie pełnej historii rankingowej dla wybranego klubu
-    pub async fn read_team_history(&self, team: &str) -> Result<Vec<ClubEloRow>> {
+    pub async fn read_team_history(&self, team: &str) -> Result<serde_json::Value> {
         let formatted_team = team.replace(" ", "");
         let url = format!("{}/{}", self.base_url, formatted_team);
         let cache_file = self.config.data_dir.join(format!("{}.csv", formatted_team));
@@ -55,7 +54,7 @@ impl ClubEloExtractor {
     }
 
     /// Bezpieczny transfer sieciowy uwzględniający zapisywanie CSV na dysk w celu uniknięcia rate-limitów
-    async fn fetch_with_cache(&self, url: &str, cache_path: &Path) -> Result<Vec<ClubEloRow>> {
+    async fn fetch_with_cache(&self, url: &str, cache_path: &Path) -> Result<serde_json::Value> {
         let csv_text = if !self.config.no_cache && cache_path.exists() {
             tracing::info!("Wczytywanie z lokalnego Cache: {:?}", cache_path);
             fs::read_to_string(cache_path).context("Błąd wczytywania z dysku")?
@@ -74,18 +73,6 @@ impl ClubEloExtractor {
             
             text
         };
-        
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(true)
-            .from_reader(csv_text.as_bytes());
-            
-        let mut rows = Vec::new();
-        
-        for result in rdr.deserialize() {
-            let record: ClubEloRow = result.context("Błąd podczas parsowania wiersza CSV z ClubElo")?;
-            rows.push(record);
-        }
-        
-        Ok(rows)
+        Ok(serde_json::Value::String(csv_text))
     }
 }

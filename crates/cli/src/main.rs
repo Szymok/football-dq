@@ -3,7 +3,7 @@ use extractors::fbref::{FbrefExtractor, FbrefConfig};
 use extractors::understat::{UnderstatExtractor, UnderstatConfig};
 use extractors::whoscored::{WhoscoredExtractor, WhoscoredConfig};
 use extractors::sofascore::{SofascoreExtractor, SofascoreConfig};
-use extractors::matchhistory::{MatchhistoryExtractor, MatchhistoryConfig};
+use extractors::matchhistory::{MatchHistoryExtractor, MatchHistoryConfig};
 // reszta ekstraktorów np. ClubElo
 
 #[derive(Parser, Debug)]
@@ -60,6 +60,10 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(tracing::Level::INFO)
         .init();
 
+    // Inicjalizacja warstwy Storage (SQLite z sqlx) chroniącej dane meczów
+    let db_url = "sqlite:football-dq.db";
+    let _pool = domain::db::init_db(db_url).await?;
+
     let cli = Cli::parse();
 
     match cli.command {
@@ -83,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
                         ..Default::default()
                     };
                     let extractor = UnderstatExtractor::new(Some(config));
-                    let _ = extractor.read_schedule(force_cache).await?;
+                    let _ = extractor.read_schedule(false, force_cache).await?;
                 },
                 "whoscored" => {
                     let config = WhoscoredConfig {
@@ -104,12 +108,12 @@ async fn main() -> anyhow::Result<()> {
                     let _ = extractor.read_schedule(force_cache).await?;
                 },
                 "matchhistory" => {
-                    let config = MatchhistoryConfig {
+                    let config = MatchHistoryConfig {
                         leagues: vec![league.clone()],
                         seasons: vec![season.clone()],
                         ..Default::default()
                     };
-                    let extractor = MatchhistoryExtractor::new(Some(config));
+                    let extractor = MatchHistoryExtractor::new(Some(config));
                     let _ = extractor.read_schedule(force_cache).await?;
                 },
                 _ => {

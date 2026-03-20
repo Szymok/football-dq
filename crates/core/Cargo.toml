@@ -1,5 +1,5 @@
 [package]
-name = "extractors"
+name = "core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,11 +7,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-domain = { path = "../domain" }
-tokio.workspace = true
-reqwest.workspace = true
-serde.workspace = true
 anyhow.workspace = true
-csv = "1.4.0"
+serde.workspace = true
 serde_json = "1.0.149"
+strsim = "0.11.1"
 tracing.workspace = true

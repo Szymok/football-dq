@@ -110,17 +110,3 @@ impl FbrefExtractor {
     }
 }
 
-// Zgodność wsteczna z trait Extractor
-use crate::Extractor;
-use domain::models::Match;
-
-impl Extractor for FbrefExtractor {
-    fn source_name(&self) -> &str {
-        "FBref"
-    }
-
-    fn fetch_matches(&self) -> Result<Vec<Match>> {
-        // Docelowo odpaliłaby parsing na stringu z read_schedule()
-        Ok(vec![])
-    }
-}
