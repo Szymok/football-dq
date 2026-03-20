@@ -3,6 +3,10 @@ pub mod official;
 pub mod clubelo;
 pub mod normalize;
 pub mod espn;
+pub mod espn;
+pub mod matchhistory;
+pub mod sofascore;
+pub mod sofifa;
 
 
 use anyhow::Result;
