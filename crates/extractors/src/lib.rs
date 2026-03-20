@@ -1,5 +1,8 @@
 pub mod fbref;
 pub mod official;
+pub mod clubelo;
+pub mod normalize;
+
 
 use anyhow::Result;
 use domain::models::Match;

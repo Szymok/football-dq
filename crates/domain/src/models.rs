@@ -18,3 +18,21 @@ pub struct DataQualityMetric {
     pub score: f64,
     pub description: String,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ClubEloRow {
+    #[serde(rename = "Rank")]
+    pub rank: Option<u32>,
+    #[serde(rename = "Club")]
+    pub club: String,
+    #[serde(rename = "Country")]
+    pub country: String,
+    #[serde(rename = "Level")]
+    pub level: Option<u32>,
+    #[serde(rename = "Elo")]
+    pub elo: f64,
+    #[serde(rename = "From")]
+    pub from_date: String,
+    #[serde(rename = "To")]
+    pub to_date: String,
+}
