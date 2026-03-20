@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
                         ..Default::default()
                     };
                     let extractor = UnderstatExtractor::new(Some(config));
-                    let _ = extractor.read_schedule(false, force_cache).await?;
+                    let _ = extractor.read_schedule(force_cache, true).await?;
                 },
                 "whoscored" => {
                     let config = WhoscoredConfig {

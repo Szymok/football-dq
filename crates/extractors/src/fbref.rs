@@ -94,9 +94,25 @@ impl FbrefExtractor {
             tracing::info!("Wczytywanie z lokalnego Cache FBref: {:?}", cache_path);
             fs::read_to_string(cache_path).context("Błąd czytania Cache FBref")
         } else {
-            tracing::info!("Pobieranie HTML z FBref: {}", url);
-            let response = self.client.get(url).send().await.context("HTTP error z FBref")?;
-            let text = response.text().await.context("Puste API FBref")?;
+            tracing::info!("Uruchamianie robota Headless Chrome dla ominięcia Cloudflare FBref: {}", url);
+            let url_clone = url.to_string();
+            let text = tokio::task::spawn_blocking(move || -> Result<String> {
+                let options = headless_chrome::LaunchOptions {
+                    headless: false,
+                    args: vec![
+                        std::ffi::OsStr::new("--disable-blink-features=AutomationControlled"),
+                    ],
+                    ..Default::default()
+                };
+                let browser = headless_chrome::Browser::new(options).map_err(|e| anyhow::anyhow!("Browser err: {:?}", e))?;
+                let tab = browser.new_tab().map_err(|e| anyhow::anyhow!("Tab err: {:?}", e))?;
+                tab.navigate_to(&url_clone).map_err(|e| anyhow::anyhow!("Nav err: {:?}", e))?;
+                
+                // Oczekiwanie na przetworzenie strony
+                std::thread::sleep(std::time::Duration::from_secs(8));
+                
+                tab.get_content().map_err(|e| anyhow::anyhow!("Content err: {:?}", e))
+            }).await??;
             
             if !self.config.no_store {
                 if let Some(parent) = cache_path.parent() {

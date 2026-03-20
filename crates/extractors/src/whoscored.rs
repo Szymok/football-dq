@@ -47,12 +47,14 @@ impl WhoscoredExtractor {
     /// Pobieranie kalendarza meczowego
     pub async fn read_schedule(&self, force_cache: bool) -> Result<Vec<String>> {
         let mut results = Vec::new();
-        let no_cache_override = if force_cache { false } else { self.config.no_cache };
+        let no_cache_override = if force_cache { true } else { self.config.no_cache };
         
         for season in &self.config.seasons {
             for league in &self.config.leagues {
-                // Generowanie przybliżonych ścieżek WhoScored (zabezpieczenia URLi wymagają precyzyjnych map, upraszczamy na MVP)
-                let url = format!("{}/Regions/252/Tournaments/{}/Seasons/{}", self.base_url, league, season);
+                let mapped_region = if league == "EPL" { "252" } else { league.as_str() };
+                let mapped_tourn = if league == "EPL" { "2" } else { league.as_str() };
+                let mapped_season = if season == "2526" { "10327" } else if season == "2425" { "9618" } else { season.as_str() };
+                let url = format!("{}/Regions/{}/Tournaments/{}/Seasons/{}", self.base_url, mapped_region, mapped_tourn, mapped_season);
                 let cache_file = self.config.data_dir.join(format!("schedule_{}_{}.html", season, league));
                 
                 let data = self.fetch_with_cache_override(&url, &cache_file, no_cache_override).await.unwrap_or_default();
@@ -68,7 +70,7 @@ impl WhoscoredExtractor {
         let url = format!("{}/Matches/{}/Preview", self.base_url, id_str);
         let cache_file = self.config.data_dir.join(format!("missing_players_{}.html", id_str));
         
-        let no_cache_override = if force_cache { false } else { self.config.no_cache };
+        let no_cache_override = if force_cache { true } else { self.config.no_cache };
         self.fetch_with_cache_override(&url, &cache_file, no_cache_override).await
     }
 
@@ -94,7 +96,7 @@ impl WhoscoredExtractor {
             cache_file = self.config.data_dir.join(format!("events_spadl_{}.json", id_str));
         }
 
-        let no_cache_override = if force_cache { false } else { self.config.no_cache };
+        let no_cache_override = if force_cache { true } else { self.config.no_cache };
         self.fetch_with_cache_override(&url, &cache_file, no_cache_override).await
     }
 
@@ -104,14 +106,26 @@ impl WhoscoredExtractor {
             tracing::info!("Wczytywanie WhoScored z dysku: {:?}", cache_path);
             fs::read_to_string(cache_path).context("Błąd czytania Cache WhoScored z dysku")
         } else {
-            tracing::info!("Ostrzeżenie: System WhoScored wymaga potężnych silników Headless z powodu ochrony Incapsula.");
-            tracing::info!("Wykonuję próbny Request HTTP na: {}", url);
-            let response = self.client.get(url)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                .send()
-                .await.context("HTTP z sieci: Błąd dla domeny WhoScored (prawdopodobny ban IP)")?;
+            tracing::info!("Uruchamianie robota Headless Chrome dla ominięcia Cloudflare WAF na: {}", url);
+            let url_clone = url.to_string();
+            
+            let text = tokio::task::spawn_blocking(move || -> Result<String> {
+                let options = headless_chrome::LaunchOptions {
+                    headless: false,
+                    args: vec![
+                        std::ffi::OsStr::new("--disable-blink-features=AutomationControlled"),
+                    ],
+                    ..Default::default()
+                };
+                let browser = headless_chrome::Browser::new(options).map_err(|e| anyhow::anyhow!("Browser error: {:?}", e))?;
+                let tab = browser.new_tab().map_err(|e| anyhow::anyhow!("Tab error: {:?}", e))?;
+                tab.navigate_to(&url_clone).map_err(|e| anyhow::anyhow!("Navigation error: {:?}", e))?;
                 
-            let text = response.text().await.context("Pusta zawartość WhoScored API")?;
+                // Czekamy na przetworzenie testu Cloudflare "Enable JavaScript and cookies..."
+                std::thread::sleep(std::time::Duration::from_secs(8));
+                
+                tab.get_content().map_err(|e| anyhow::anyhow!("Content error: {:?}", e))
+            }).await??;
             
             if !self.config.no_store {
                 if let Some(parent) = cache_path.parent() {

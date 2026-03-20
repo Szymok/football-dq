@@ -33,8 +33,13 @@ pub struct EspnExtractor {
 
 impl EspnExtractor {
     pub fn new(config: Option<EspnConfig>) -> Self {
+        let client = Client::builder()
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .build()
+            .unwrap_or_else(|_| Client::new());
+
         Self {
-            client: Client::new(),
+            client,
             // Bazowy URL dla ESPN API m.in. z informacjami o meczach piłki nożnej
             base_url: "http://site.api.espn.com/apis/site/v2/sports/soccer".to_string(),
             config: config.unwrap_or_default(),
@@ -45,11 +50,11 @@ impl EspnExtractor {
     pub async fn read_schedule(&self, force_cache: bool) -> Result<Vec<Value>> {
         let mut results = Vec::new();
         
-        let no_cache_override = if force_cache { false } else { self.config.no_cache };
+        let no_cache_override = if force_cache { true } else { self.config.no_cache };
         
         for league in &self.config.leagues {
-            // Przykładowy punkt wejścia terminarzy w strukturach z ESPN to scoreboard
-            let url = format!("{}/{}/scoreboard", self.base_url, league);
+            let mapped_league = if league == "EPL" { "eng.1" } else { league.as_str() };
+            let url = format!("{}/{}/scoreboard", self.base_url, mapped_league);
             let cache_file = self.config.data_dir.join(format!("schedule_{}.json", league));
             
             let json_value = self.fetch_json_with_cache(&url, &cache_file, no_cache_override).await?;

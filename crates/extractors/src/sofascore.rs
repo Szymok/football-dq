@@ -33,8 +33,21 @@ pub struct SofascoreExtractor {
 
 impl SofascoreExtractor {
     pub fn new(config: Option<SofascoreConfig>) -> Self {
+        use reqwest::header;
+        let mut headers = header::HeaderMap::new();
+        headers.insert(header::USER_AGENT, header::HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"));
+        headers.insert(header::ACCEPT, header::HeaderValue::from_static("application/json, text/plain, */*"));
+        headers.insert(header::REFERER, header::HeaderValue::from_static("https://www.sofascore.com/"));
+        headers.insert("Origin", header::HeaderValue::from_static("https://www.sofascore.com"));
+        headers.insert("Cache-Control", header::HeaderValue::from_static("no-cache"));
+
+        let client = Client::builder()
+            .default_headers(headers)
+            .build()
+            .unwrap_or_else(|_| Client::new());
+
         Self {
-            client: Client::new(),
+            client,
             base_url: "https://api.sofascore.com/api/v1".to_string(), // Główne API
             config: config.unwrap_or_default(),
         }
@@ -63,7 +76,7 @@ impl SofascoreExtractor {
     /// Odczyt tabel poszczególnych lig (na dany sezon)
     pub async fn read_league_table(&self, force_cache: bool) -> Result<Vec<Value>> {
         let mut results = Vec::new();
-        let no_cache_override = if force_cache { false } else { self.config.no_cache };
+        let no_cache_override = if force_cache { true } else { self.config.no_cache };
         
         for season in &self.config.seasons {
             for league in &self.config.leagues {
@@ -80,11 +93,13 @@ impl SofascoreExtractor {
     /// Odczyt terminarzy / wydarzeń (składów, statystyk) na ligę w sezonie
     pub async fn read_schedule(&self, force_cache: bool) -> Result<Vec<Value>> {
         let mut results = Vec::new();
-        let no_cache_override = if force_cache { false } else { self.config.no_cache };
+        let no_cache_override = if force_cache { true } else { self.config.no_cache };
         
         for season in &self.config.seasons {
             for league in &self.config.leagues {
-                let url = format!("{}/unique-tournament/{}/season/{}/events", self.base_url, league, season);
+                let mapped_league = if league == "EPL" { "17" } else { league.as_str() };
+                let mapped_season = if season == "2526" { "61627" } else if season == "2425" { "52186" } else { season.as_str() };
+                let url = format!("{}/unique-tournament/{}/season/{}/events/last/0", self.base_url, mapped_league, mapped_season);
                 let cache_file = self.config.data_dir.join(format!("schedule_{}_{}.json", season, league));
                 
                 let data = self.fetch_json_with_cache(&url, &cache_file, no_cache_override).await?;
@@ -100,14 +115,30 @@ impl SofascoreExtractor {
             tracing::info!("Wczytywanie Sofascore z lokalnego Cache: {:?}", cache_path);
             fs::read_to_string(cache_path).context("Błąd czytania Cache Sofascore")?
         } else {
-            tracing::info!("Pobieranie HTTP z Sofascore: {}", url);
-            let response = self.client.get(url)
-                // Sofascore wymaga często ustawienia User-Agent, aby odbijać ataki skryptów
-                .header("User-Agent", "Mozilla/5.0")
-                .send()
-                .await.context("HTTP error z API Sofascore")?;
+            tracing::info!("Uruchamianie robota Headless Chrome dla API Sofascore: {}", url);
+            let url_clone = url.to_string();
+            let text = tokio::task::spawn_blocking(move || -> Result<String> {
+                let options = headless_chrome::LaunchOptions {
+                    headless: false,
+                    args: vec![
+                        std::ffi::OsStr::new("--disable-blink-features=AutomationControlled"),
+                    ],
+                    ..Default::default()
+                };
+                let browser = headless_chrome::Browser::new(options).map_err(|e| anyhow::anyhow!("Browser err: {:?}", e))?;
+                let tab = browser.new_tab().map_err(|e| anyhow::anyhow!("Tab err: {:?}", e))?;
+                tab.navigate_to(&url_clone).map_err(|e| anyhow::anyhow!("Nav err: {:?}", e))?;
                 
-            let text = response.text().await.context("Brak treści JSON w API Sofascore")?;
+                std::thread::sleep(std::time::Duration::from_secs(4));
+                
+                let result = tab.evaluate("document.body.innerText", false)
+                    .map_err(|e| anyhow::anyhow!("JS err: {:?}", e))?;
+                
+                let json_str = result.value.and_then(|v| v.as_str().map(|s| s.to_string()))
+                    .unwrap_or_else(|| "{}".to_string());
+                
+                Ok(json_str)
+            }).await??;
             
             if !self.config.no_store {
                 if let Some(parent) = cache_path.parent() {

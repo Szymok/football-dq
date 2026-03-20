@@ -98,21 +98,31 @@ impl SofifaExtractor {
             tracing::info!("Wczytywanie lokalnego Cache SoFIFA: {:?}", cache_path);
             fs::read_to_string(cache_path).context("Błąd wczytywania Cache dla portalu SoFIFA z dysku")
         } else {
-            tracing::info!("Pobieranie w locie HTML z SoFIFA: {}", url);
-            let response = self.client.get(url)
-                // Wzorowanie zabezpieczenia - oszustwo headerów, by strona nie odrzucała nas na warstwie Cloudflare
-                .header("User-Agent", "Mozilla/5.0")
-                .send()
-                .await.context("HTTP z sieci: Błąd dla domeny SoFIFA API")?;
+            tracing::info!("Uruchamianie robota Headless Chrome dla ominięcia Cloudflare SoFIFA: {}", url);
+            let url_clone = url.to_string();
+            let text = tokio::task::spawn_blocking(move || -> Result<String> {
+                let options = headless_chrome::LaunchOptions {
+                    headless: false,
+                    args: vec![
+                        std::ffi::OsStr::new("--disable-blink-features=AutomationControlled"),
+                    ],
+                    ..Default::default()
+                };
+                let browser = headless_chrome::Browser::new(options).map_err(|e| anyhow::anyhow!("Browser err: {:?}", e))?;
+                let tab = browser.new_tab().map_err(|e| anyhow::anyhow!("Tab err: {:?}", e))?;
+                tab.navigate_to(&url_clone).map_err(|e| anyhow::anyhow!("Nav err: {:?}", e))?;
                 
-            let text = response.text().await.context("Pusta zawartość API SoFIFA")?;
+                std::thread::sleep(std::time::Duration::from_secs(8));
+                
+                tab.get_content().map_err(|e| anyhow::anyhow!("Content err: {:?}", e))
+            }).await??;
             
             if !self.config.no_store {
                 if let Some(parent) = cache_path.parent() {
                     fs::create_dir_all(parent)?;
                 }
                 fs::write(&cache_path, &text)?;
-                tracing::info!("Zapisano do dysku potężny HTML SoFIFA pod ścieżkę: {:?}", cache_path);
+                tracing::info!("Zapisano kod HTML SoFIFA do Cache: {:?}", cache_path);
             }
             Ok(text)
         }
