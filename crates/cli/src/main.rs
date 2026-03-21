@@ -259,6 +259,7 @@ async fn main() -> anyhow::Result<()> {
 
             // ── 3. Budowanie LinkedMatch i zapis do SQLite ──
             // Czyścimy starą tabelę
+            sqlx::query("DELETE FROM match_source_stats").execute(&pool).await?;
             sqlx::query("DELETE FROM linked_matches").execute(&pool).await?;
 
             let mut total_inserted = 0u32;
@@ -318,8 +319,8 @@ async fn main() -> anyhow::Result<()> {
                 }).collect();
                 let sources_json = serde_json::to_string(&source_data)?;
 
-                sqlx::query(
-                    "INSERT INTO linked_matches (date, home_team_canonical, away_team_canonical, home_goals, away_goals, sources_json, score_agreement, xg_discrepancy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                let result = sqlx::query(
+                    "INSERT INTO linked_matches (date, home_team_canonical, away_team_canonical, home_goals, away_goals, sources_json, source_count, score_agreement, xg_discrepancy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 )
                 .bind(date)
                 .bind(&canonical_home)
@@ -327,10 +328,56 @@ async fn main() -> anyhow::Result<()> {
                 .bind(home_goals as i32)
                 .bind(away_goals as i32)
                 .bind(&sources_json)
+                .bind(group.len() as i32)
                 .bind(score_agreement)
                 .bind(xg_discrepancy)
                 .execute(&pool)
                 .await?;
+
+                let linked_match_id = result.last_insert_rowid();
+
+                for m in group {
+                    sqlx::query(
+                        "INSERT INTO match_source_stats (
+                            linked_match_id, source,
+                            home_goals, away_goals, ht_home_goals, ht_away_goals,
+                            home_xg, away_xg, home_npxg, away_npxg,
+                            home_shots, away_shots, home_shots_target, away_shots_target,
+                            home_corners, away_corners, home_fouls, away_fouls,
+                            home_yellow, away_yellow, home_red, away_red,
+                            home_ppda, away_ppda, home_deep, away_deep, referee
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    )
+                    .bind(linked_match_id)
+                    .bind(&m.source)
+                    .bind(m.home_goals.map(|v| v as i32))
+                    .bind(m.away_goals.map(|v| v as i32))
+                    .bind(m.ht_home_goals.map(|v| v as i32))
+                    .bind(m.ht_away_goals.map(|v| v as i32))
+                    .bind(m.home_xg)
+                    .bind(m.away_xg)
+                    .bind(m.home_npxg)
+                    .bind(m.away_npxg)
+                    .bind(m.home_shots.map(|v| v as i32))
+                    .bind(m.away_shots.map(|v| v as i32))
+                    .bind(m.home_shots_on_target.map(|v| v as i32))
+                    .bind(m.away_shots_on_target.map(|v| v as i32))
+                    .bind(m.home_corners.map(|v| v as i32))
+                    .bind(m.away_corners.map(|v| v as i32))
+                    .bind(m.home_fouls.map(|v| v as i32))
+                    .bind(m.away_fouls.map(|v| v as i32))
+                    .bind(m.home_yellow.map(|v| v as i32))
+                    .bind(m.away_yellow.map(|v| v as i32))
+                    .bind(m.home_red.map(|v| v as i32))
+                    .bind(m.away_red.map(|v| v as i32))
+                    .bind(m.home_ppda)
+                    .bind(m.away_ppda)
+                    .bind(m.home_deep.map(|v| v as i32))
+                    .bind(m.away_deep.map(|v| v as i32))
+                    .bind(&m.referee)
+                    .execute(&pool)
+                    .await?;
+                }
 
                 total_inserted += 1;
             }

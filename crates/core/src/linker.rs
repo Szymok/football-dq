@@ -32,6 +32,8 @@ impl MatchLinker {
 
         if n_a == n_b {
             1.0
+        } else if n_a.contains("manchester") && n_b.contains("manchester") {
+            0.0 // Manchester City != Manchester United
         } else {
             jaro_winkler(&n_a, &n_b)
         }

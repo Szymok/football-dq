@@ -31,6 +31,7 @@ pub async fn start_server(port: u16) -> anyhow::Result<()> {
         .route("/api/sync/status", get(get_status))
         .route("/api/sync/trigger", post(trigger_sync))
         .route("/api/linked-matches", get(get_linked_matches))
+        .route("/api/matches/:id", axum::routing::get(get_match_stats))
         .route("/api/dq/summary", get(get_dq_summary))
         .layer(cors)
         .with_state(state);
@@ -55,6 +56,7 @@ struct LinkedMatchRow {
     home_goals: Option<i32>,
     away_goals: Option<i32>,
     sources_json: String,
+    source_count: i32,
     score_agreement: bool,
     xg_discrepancy: Option<f64>,
 }
@@ -63,8 +65,43 @@ async fn get_linked_matches(
     State(state): State<Arc<ApiState>>,
 ) -> Json<Vec<LinkedMatchRow>> {
     let rows = sqlx::query_as::<_, LinkedMatchRow>(
-        "SELECT id, date, home_team_canonical, away_team_canonical, home_goals, away_goals, sources_json, score_agreement, xg_discrepancy FROM linked_matches ORDER BY date DESC LIMIT 500"
+        "SELECT id, date, home_team_canonical, away_team_canonical, home_goals, away_goals, sources_json, source_count, score_agreement, xg_discrepancy FROM linked_matches ORDER BY date DESC LIMIT 500"
     )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    Json(rows)
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+struct MatchSourceStatRow {
+    id: i64,
+    linked_match_id: i64,
+    source: String,
+    home_goals: Option<i32>, away_goals: Option<i32>,
+    ht_home_goals: Option<i32>, ht_away_goals: Option<i32>,
+    home_xg: Option<f64>, away_xg: Option<f64>,
+    home_npxg: Option<f64>, away_npxg: Option<f64>,
+    home_shots: Option<i32>, away_shots: Option<i32>,
+    home_shots_target: Option<i32>, away_shots_target: Option<i32>,
+    home_corners: Option<i32>, away_corners: Option<i32>,
+    home_fouls: Option<i32>, away_fouls: Option<i32>,
+    home_yellow: Option<i32>, away_yellow: Option<i32>,
+    home_red: Option<i32>, away_red: Option<i32>,
+    home_ppda: Option<f64>, away_ppda: Option<f64>,
+    home_deep: Option<i32>, away_deep: Option<i32>,
+    referee: Option<String>,
+}
+
+async fn get_match_stats(
+    State(state): State<Arc<ApiState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+) -> Json<Vec<MatchSourceStatRow>> {
+    let rows = sqlx::query_as::<_, MatchSourceStatRow>(
+        "SELECT * FROM match_source_stats WHERE linked_match_id = ?"
+    )
+    .bind(id)
     .fetch_all(&state.pool)
     .await
     .unwrap_or_default();

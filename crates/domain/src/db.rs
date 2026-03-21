@@ -55,13 +55,36 @@ pub async fn init_db(db_url: &str) -> anyhow::Result<SqlitePool> {
             home_goals INTEGER,
             away_goals INTEGER,
             sources_json TEXT NOT NULL,
+            source_count INTEGER NOT NULL DEFAULT 1,
             score_agreement BOOLEAN NOT NULL DEFAULT 1,
             xg_discrepancy REAL,
             linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );"
     ).execute(&pool).await?;
 
-    tracing::info!("✅ SQLite połączony i tabele schematów (raw_extractions, matches_dq, linked_matches) utworzone.");
+    // Tabela: Statystyki z poszczególnych źródeł per mecz
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS match_source_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            linked_match_id INTEGER NOT NULL REFERENCES linked_matches(id),
+            source TEXT NOT NULL,
+            home_goals INTEGER, away_goals INTEGER,
+            ht_home_goals INTEGER, ht_away_goals INTEGER,
+            home_xg REAL, away_xg REAL,
+            home_npxg REAL, away_npxg REAL,
+            home_shots INTEGER, away_shots INTEGER,
+            home_shots_target INTEGER, away_shots_target INTEGER,
+            home_corners INTEGER, away_corners INTEGER,
+            home_fouls INTEGER, away_fouls INTEGER,
+            home_yellow INTEGER, away_yellow INTEGER,
+            home_red INTEGER, away_red INTEGER,
+            home_ppda REAL, away_ppda REAL,
+            home_deep INTEGER, away_deep INTEGER,
+            referee TEXT
+        );"
+    ).execute(&pool).await?;
+
+    tracing::info!("✅ SQLite połączony i tabele schematów (raw_extractions, matches_dq, linked_matches, match_source_stats) utworzone.");
 
     Ok(pool)
 }

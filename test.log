@@ -1,0 +1,23 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running unittests src\lib.rs (target\debug\deps\core-d20856840b31b8ef.exe)
+
+running 3 tests
+test reconciler::tests::test_compare_xg ... ok
+test linker::tests::test_normalize_aliases ... ok
+test linker::tests::test_different_teams_stay_different ... FAILED
+
+failures:
+
+---- linker::tests::test_different_teams_stay_different stdout ----
+
+thread 'linker::tests::test_different_teams_stay_different' (41620) panicked at crates\core\src\linker.rs:128:9:
+assertion failed: !linker.is_match("Manchester City", "Manchester United")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    linker::tests::test_different_teams_stay_different
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p core --lib`

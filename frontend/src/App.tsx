@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchScorecard, fetchLinkedMatches, fetchDqSummary, type LinkedMatch, type DqSummary } from './api'
 import { Activity, Database, CheckSquare, Settings2, ShieldAlert, Cpu, BarChart3, AlertCircle, CheckCircle2, Link2 } from 'lucide-react'
+import MatchList from './components/MatchList'
 
 // Types
 type DQRun = {
@@ -205,69 +206,7 @@ export default function App() {
               <span className="text-base font-medium">Loading linked matches...</span>
             </div>
           ) : (
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Date</th>
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Home</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Score</th>
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Away</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Sources</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">Status</th>
-                      <th className="text-center px-4 py-3 font-semibold text-[var(--color-text-muted)] uppercase tracking-wider text-xs">xG Diff</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredMatches.slice(0, 100).map((m) => {
-                      const sources = JSON.parse(m.sources_json || '[]');
-                      const sourceNames: string[] = sources.map((s: any) => s.source);
-                      return (
-                        <tr key={m.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-bg)] transition-colors">
-                          <td className="px-4 py-3 text-[var(--color-text-muted)] font-mono text-xs">{m.date}</td>
-                          <td className="px-4 py-3 font-medium text-[var(--color-text-main)]">{m.home_team_canonical}</td>
-                          <td className="px-4 py-3 text-center font-bold text-[var(--color-text-main)]">
-                            {m.home_goals ?? '?'} - {m.away_goals ?? '?'}
-                          </td>
-                          <td className="px-4 py-3 font-medium text-[var(--color-text-main)]">{m.away_team_canonical}</td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex justify-center gap-1 flex-wrap">
-                              {sourceNames.map((s: string) => (
-                                <span key={s} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-blue-100 text-blue-700 border border-blue-200">
-                                  {s}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {m.score_agreement ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3" /> OK
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
-                                <AlertCircle className="w-3 h-3" /> Mismatch
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center font-mono text-xs">
-                            {m.xg_discrepancy != null 
-                              ? <span className={m.xg_discrepancy > 0.3 ? 'text-amber-600 font-semibold' : 'text-[var(--color-text-muted)]'}>{m.xg_discrepancy.toFixed(3)}</span>
-                              : <span className="text-[var(--color-text-muted)]">—</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {filteredMatches.length > 100 && (
-                <div className="px-4 py-3 text-center text-sm text-[var(--color-text-muted)] border-t border-[var(--color-border)]">
-                  Showing first 100 of {filteredMatches.length} matches
-                </div>
-              )}
-            </div>
+            <MatchList matches={filteredMatches} />
           )}
         </div>
       );

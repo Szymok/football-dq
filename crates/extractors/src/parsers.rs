@@ -14,6 +14,27 @@ pub struct NormalizedMatch {
     pub away_goals: Option<u8>,
     pub home_xg: Option<f64>,
     pub away_xg: Option<f64>,
+    pub ht_home_goals: Option<u8>,
+    pub ht_away_goals: Option<u8>,
+    pub home_shots: Option<u8>,
+    pub away_shots: Option<u8>,
+    pub home_shots_on_target: Option<u8>,
+    pub away_shots_on_target: Option<u8>,
+    pub home_corners: Option<u8>,
+    pub away_corners: Option<u8>,
+    pub home_fouls: Option<u8>,
+    pub away_fouls: Option<u8>,
+    pub home_yellow: Option<u8>,
+    pub away_yellow: Option<u8>,
+    pub home_red: Option<u8>,
+    pub away_red: Option<u8>,
+    pub home_npxg: Option<f64>,
+    pub away_npxg: Option<f64>,
+    pub home_ppda: Option<f64>,
+    pub away_ppda: Option<f64>,
+    pub home_deep: Option<u8>,
+    pub away_deep: Option<u8>,
+    pub referee: Option<String>,
 }
 
 // ─── ESPN ────────────────────────────────────────────────────────────────────
@@ -105,6 +126,27 @@ pub fn parse_espn(path: &Path) -> Result<Vec<NormalizedMatch>> {
                     away_goals: away_score,
                     home_xg: None,
                     away_xg: None,
+                    ht_home_goals: None,
+                    ht_away_goals: None,
+                    home_shots: None,
+                    away_shots: None,
+                    home_shots_on_target: None,
+                    away_shots_on_target: None,
+                    home_corners: None,
+                    away_corners: None,
+                    home_fouls: None,
+                    away_fouls: None,
+                    home_yellow: None,
+                    away_yellow: None,
+                    home_red: None,
+                    away_red: None,
+                    home_npxg: None,
+                    away_npxg: None,
+                    home_ppda: None,
+                    away_ppda: None,
+                    home_deep: None,
+                    away_deep: None,
+                    referee: None,
                 });
             }
         }
@@ -176,6 +218,27 @@ pub fn parse_sofascore(path: &Path) -> Result<Vec<NormalizedMatch>> {
                 away_goals: a_goals,
                 home_xg: None,
                 away_xg: None,
+                ht_home_goals: None,
+                ht_away_goals: None,
+                home_shots: None,
+                away_shots: None,
+                home_shots_on_target: None,
+                away_shots_on_target: None,
+                home_corners: None,
+                away_corners: None,
+                home_fouls: None,
+                away_fouls: None,
+                home_yellow: None,
+                away_yellow: None,
+                home_red: None,
+                away_red: None,
+                home_npxg: None,
+                away_npxg: None,
+                home_ppda: None,
+                away_ppda: None,
+                home_deep: None,
+                away_deep: None,
+                referee: None,
             });
         }
     }
@@ -203,6 +266,10 @@ pub fn parse_understat(path: &Path) -> Result<Vec<NormalizedMatch>> {
         missed: Option<u8>,
         xg: Option<f64>,
         xga: Option<f64>,
+        npxg: Option<f64>,
+        npxga: Option<f64>,
+        ppda: Option<f64>,
+        deep: Option<u8>,
     }
 
     let mut all_entries: Vec<TeamEntry> = Vec::new();
@@ -231,6 +298,10 @@ pub fn parse_understat(path: &Path) -> Result<Vec<NormalizedMatch>> {
             }).map(|v| v as u8);
             let xg = h.get("xG").and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
             let xga = h.get("xGA").and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
+            let npxg = h.get("npxG").and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
+            let npxga = h.get("npxGA").and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
+            let ppda = h.get("ppda").and_then(|v| v.get("att")).and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
+            let deep = h.get("deep").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).map(|v| v as u8);
 
             all_entries.push(TeamEntry {
                 title: team_title.clone(),
@@ -240,6 +311,10 @@ pub fn parse_understat(path: &Path) -> Result<Vec<NormalizedMatch>> {
                 missed,
                 xg,
                 xga,
+                npxg,
+                npxga,
+                ppda,
+                deep,
             });
         }
     }
@@ -271,6 +346,10 @@ pub fn parse_understat(path: &Path) -> Result<Vec<NormalizedMatch>> {
         let mut opponent_title = String::new();
         let mut away_xg: Option<f64> = None;
         let mut away_xga: Option<f64> = None;
+        let mut away_npxg: Option<f64> = None;
+        let mut away_npxga: Option<f64> = None;
+        let mut away_ppda: Option<f64> = None;
+        let mut away_deep: Option<u8> = None;
 
         if let Some(away_entries) = away_by_date.get(&entry.date) {
             for away in away_entries {
@@ -280,6 +359,10 @@ pub fn parse_understat(path: &Path) -> Result<Vec<NormalizedMatch>> {
                     opponent_title = away.title.clone();
                     away_xg = away.xg;
                     away_xga = away.xga;
+                    away_npxg = away.npxg;
+                    away_npxga = away.npxga;
+                    away_ppda = away.ppda;
+                    away_deep = away.deep;
                     break;
                 }
             }
@@ -295,6 +378,10 @@ pub fn parse_understat(path: &Path) -> Result<Vec<NormalizedMatch>> {
                     opponent_title = non_self[0].title.clone();
                     away_xg = non_self[0].xg;
                     away_xga = non_self[0].xga;
+                    away_npxg = non_self[0].npxg;
+                    away_npxga = non_self[0].npxga;
+                    away_ppda = non_self[0].ppda;
+                    away_deep = non_self[0].deep;
                 }
             }
         }
@@ -315,6 +402,27 @@ pub fn parse_understat(path: &Path) -> Result<Vec<NormalizedMatch>> {
             away_goals: entry.missed,
             home_xg: entry.xg,
             away_xg,
+            ht_home_goals: None,
+            ht_away_goals: None,
+            home_shots: None,
+            away_shots: None,
+            home_shots_on_target: None,
+            away_shots_on_target: None,
+            home_corners: None,
+            away_corners: None,
+            home_fouls: None,
+            away_fouls: None,
+            home_yellow: None,
+            away_yellow: None,
+            home_red: None,
+            away_red: None,
+            home_npxg: entry.npxg,
+            away_npxg: away_npxg,
+            home_ppda: entry.ppda,
+            away_ppda: away_ppda,
+            home_deep: entry.deep,
+            away_deep: away_deep,
+            referee: None,
         });
     }
 
@@ -342,6 +450,21 @@ pub fn parse_matchhistory(path: &Path) -> Result<Vec<NormalizedMatch>> {
     let i_date = col("Date");
     let i_fthg = col("FTHG");
     let i_ftag = col("FTAG");
+    let i_hthg = col("HTHG");
+    let i_htag = col("HTAG");
+    let i_hs = col("HS");
+    let i_as = col("AS");
+    let i_hst = col("HST");
+    let i_ast = col("AST");
+    let i_hc = col("HC");
+    let i_ac = col("AC");
+    let i_hf = col("HF");
+    let i_af = col("AF");
+    let i_hy = col("HY");
+    let i_ay = col("AY");
+    let i_hr = col("HR");
+    let i_ar = col("AR");
+    let i_referee = col("Referee");
 
     for result in reader.records() {
         let record = result.context("Błąd wiersza CSV")?;
@@ -350,7 +473,6 @@ pub fn parse_matchhistory(path: &Path) -> Result<Vec<NormalizedMatch>> {
         let away = i_away.and_then(|i| record.get(i)).unwrap_or("").to_string();
         let raw_date = i_date.and_then(|i| record.get(i)).unwrap_or("").to_string();
 
-        // Format daty "DD/MM/YYYY" → "YYYY-MM-DD"
         let date = if raw_date.contains('/') {
             let parts: Vec<&str> = raw_date.split('/').collect();
             if parts.len() == 3 {
@@ -362,8 +484,27 @@ pub fn parse_matchhistory(path: &Path) -> Result<Vec<NormalizedMatch>> {
             raw_date
         };
 
-        let fthg = i_fthg.and_then(|i| record.get(i)).and_then(|s| s.parse::<u8>().ok());
-        let ftag = i_ftag.and_then(|i| record.get(i)).and_then(|s| s.parse::<u8>().ok());
+        let parse_u8 = |col_idx: Option<usize>| -> Option<u8> {
+            col_idx.and_then(|i| record.get(i)).and_then(|s| s.parse::<u8>().ok())
+        };
+
+        let fthg = parse_u8(i_fthg);
+        let ftag = parse_u8(i_ftag);
+        let hthg = parse_u8(i_hthg);
+        let htag = parse_u8(i_htag);
+        let hs = parse_u8(i_hs);
+        let a_s = parse_u8(i_as);
+        let hst = parse_u8(i_hst);
+        let ast = parse_u8(i_ast);
+        let hc = parse_u8(i_hc);
+        let ac = parse_u8(i_ac);
+        let hf = parse_u8(i_hf);
+        let af = parse_u8(i_af);
+        let hy = parse_u8(i_hy);
+        let ay = parse_u8(i_ay);
+        let hr = parse_u8(i_hr);
+        let ar = parse_u8(i_ar);
+        let referee = i_referee.and_then(|i| record.get(i)).filter(|s| !s.is_empty()).map(|s| s.to_string());
 
         if !home.is_empty() && !away.is_empty() {
             matches.push(NormalizedMatch {
@@ -375,6 +516,27 @@ pub fn parse_matchhistory(path: &Path) -> Result<Vec<NormalizedMatch>> {
                 away_goals: ftag,
                 home_xg: None,
                 away_xg: None,
+                ht_home_goals: hthg,
+                ht_away_goals: htag,
+                home_shots: hs,
+                away_shots: a_s,
+                home_shots_on_target: hst,
+                away_shots_on_target: ast,
+                home_corners: hc,
+                away_corners: ac,
+                home_fouls: hf,
+                away_fouls: af,
+                home_yellow: hy,
+                away_yellow: ay,
+                home_red: hr,
+                away_red: ar,
+                home_npxg: None,
+                away_npxg: None,
+                home_ppda: None,
+                away_ppda: None,
+                home_deep: None,
+                away_deep: None,
+                referee,
             });
         }
     }
