@@ -194,13 +194,24 @@ pub fn parse_understat(path: &Path) -> Result<Vec<NormalizedMatch>> {
         .and_then(|t| t.as_object())
         .context("Brak klucza 'teams' w JSON Understat")?;
 
-    let mut seen = HashSet::new();
-    let mut matches = Vec::new();
+    // Krok 1: Zbierz dane z każdego team → ich mecze z datą i scored/missed/h_a
+    struct TeamEntry {
+        title: String,
+        date: String,
+        h_a: String,     // "h" lub "a"
+        scored: Option<u8>,
+        missed: Option<u8>,
+        xg: Option<f64>,
+        xga: Option<f64>,
+    }
+
+    let mut all_entries: Vec<TeamEntry> = Vec::new();
 
     for (_team_id, team_data) in teams {
         let team_title = team_data.get("title")
             .and_then(|v| v.as_str())
-            .unwrap_or("");
+            .unwrap_or("")
+            .to_string();
 
         let history = team_data.get("history")
             .and_then(|v| v.as_array())
@@ -210,48 +221,104 @@ pub fn parse_understat(path: &Path) -> Result<Vec<NormalizedMatch>> {
         for h in &history {
             let date = h.get("date").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let date_short = if date.len() >= 10 { date[..10].to_string() } else { date.clone() };
+            let h_a = h.get("h_a").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
-            let is_home = h.get("h_a").and_then(|v| v.as_str()) == Some("h");
-            let opponent = h.get("oppTitle").and_then(|v| v.as_str()).unwrap_or("");
-
-            let (home, away) = if is_home {
-                (team_title.to_string(), opponent.to_string())
-            } else {
-                (opponent.to_string(), team_title.to_string())
-            };
-
-            // Deduplikacja — każdy mecz występuje 2x (raz per drużyna)
-            let key = format!("{}_{}_{}", date_short, &home, &away);
-            if seen.contains(&key) {
-                continue;
-            }
-            seen.insert(key);
-
+            let scored = h.get("scored").and_then(|v| {
+                v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            }).map(|v| v as u8);
+            let missed = h.get("missed").and_then(|v| {
+                v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            }).map(|v| v as u8);
             let xg = h.get("xG").and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
             let xga = h.get("xGA").and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())));
-            let scored = h.get("scored").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).map(|v| v as u8);
-            let missed = h.get("missed").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).map(|v| v as u8);
 
-            let (home_goals, away_goals, home_xg, away_xg) = if is_home {
-                (scored, missed, xg, xga)
-            } else {
-                (missed, scored, xga, xg)
-            };
-
-            matches.push(NormalizedMatch {
-                source: "understat".into(),
+            all_entries.push(TeamEntry {
+                title: team_title.clone(),
                 date: date_short,
-                home_team: home,
-                away_team: away,
-                home_goals,
-                away_goals,
-                home_xg,
-                away_xg,
+                h_a,
+                scored,
+                missed,
+                xg,
+                xga,
             });
         }
     }
 
-    tracing::info!("Understat: sparsowano {} meczów (po deduplikacji)", matches.len());
+    // Krok 2: Buduj mapę (date, "a") → Vec<TeamEntry> dla szybkiego wyszukiwania przeciwników
+    use std::collections::HashMap;
+    let mut away_by_date: HashMap<String, Vec<&TeamEntry>> = HashMap::new();
+    for entry in &all_entries {
+        if entry.h_a == "a" {
+            away_by_date.entry(entry.date.clone()).or_default().push(entry);
+        }
+    }
+
+    // Krok 3: Dla każdego home entry — znajdź drużynę away na tę samą datę (scores matching)
+    let mut matches = Vec::new();
+    let mut seen = HashSet::new();
+
+    for entry in &all_entries {
+        if entry.h_a != "h" {
+            continue;
+        }
+
+        let key = format!("{}_{}", entry.date, entry.title);
+        if seen.contains(&key) {
+            continue;
+        }
+
+        // Znajdź przeciwnika: away entry z tą samą datą, scored==missed home, missed==scored home
+        let mut opponent_title = String::new();
+        let mut away_xg: Option<f64> = None;
+        let mut away_xga: Option<f64> = None;
+
+        if let Some(away_entries) = away_by_date.get(&entry.date) {
+            for away in away_entries {
+                // Wynik musi się zgadzać: home scored = away missed, home missed = away scored
+                let scores_match = entry.scored == away.missed && entry.missed == away.scored;
+                if scores_match && away.title != entry.title {
+                    opponent_title = away.title.clone();
+                    away_xg = away.xg;
+                    away_xga = away.xga;
+                    break;
+                }
+            }
+        }
+
+        if opponent_title.is_empty() {
+            // Fallback: jeśli nie znalazł po score — bierz jedyną away entry na tę datę
+            if let Some(away_entries) = away_by_date.get(&entry.date) {
+                let non_self: Vec<&&TeamEntry> = away_entries.iter()
+                    .filter(|a| a.title != entry.title)
+                    .collect();
+                if non_self.len() == 1 {
+                    opponent_title = non_self[0].title.clone();
+                    away_xg = non_self[0].xg;
+                    away_xga = non_self[0].xga;
+                }
+            }
+        }
+
+        if opponent_title.is_empty() {
+            tracing::warn!("Understat: nie znaleziono przeciwnika dla {} dnia {}", entry.title, entry.date);
+            continue;
+        }
+
+        seen.insert(key);
+
+        matches.push(NormalizedMatch {
+            source: "understat".into(),
+            date: entry.date.clone(),
+            home_team: entry.title.clone(),
+            away_team: opponent_title,
+            home_goals: entry.scored,
+            away_goals: entry.missed,
+            home_xg: entry.xg,
+            away_xg,
+        });
+    }
+
+    tracing::info!("Understat: sparsowano {} meczów (cross-ref po dacie)", matches.len());
     Ok(matches)
 }
 

@@ -268,8 +268,8 @@ async fn main() -> anyhow::Result<()> {
                 if group.is_empty() { continue; }
 
                 let first = &group[0];
-                let canonical_home = &first.home_team;
-                let canonical_away = &first.away_team;
+                let canonical_home = MatchLinker::normalize(&first.home_team);
+                let canonical_away = MatchLinker::normalize(&first.away_team);
                 let date = &first.date;
 
                 // Wyznacz wynik „konsensusowy" — najczęstszy wynik ze źródeł
@@ -322,8 +322,8 @@ async fn main() -> anyhow::Result<()> {
                     "INSERT INTO linked_matches (date, home_team_canonical, away_team_canonical, home_goals, away_goals, sources_json, score_agreement, xg_discrepancy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                 )
                 .bind(date)
-                .bind(canonical_home)
-                .bind(canonical_away)
+                .bind(&canonical_home)
+                .bind(&canonical_away)
                 .bind(home_goals as i32)
                 .bind(away_goals as i32)
                 .bind(&sources_json)
